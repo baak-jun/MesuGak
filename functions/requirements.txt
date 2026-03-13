@@ -1,0 +1,9 @@
+firebase-functions
+firebase-admin
+pandas
+finance-datareader
+lxml
+requests
+bs4
+schedule
+python-dotenv

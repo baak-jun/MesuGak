@@ -1,0 +1,103 @@
+/**
+ * Core Philosophy: This ruleset establishes a read-only data model for public consumption.
+ * All stock market data, including analyses and recommendations, is intended to be
+ * publicly accessible to any client application user, regardless of their
+ * authentication status.
+ *
+ * Data Structure: The data is organized in a top-level `stock_analysis`
+ * collection. Each document in this collection represents the latest analysis for a stock.
+ *
+ * Key Security Decisions:
+ * - Public Read Access: All data is publicly readable (`get`, `list`) to support
+ *   the application's function of displaying stock information to end-users.
+ * - Write Prohibition: To ensure data integrity and prevent unauthorized
+ *   manipulation, all client-side write operations (`create`, `update`, `delete`)
+ *   are strictly forbidden. It is assumed that data is populated and managed exclusively
+ *   by a trusted backend service (e.g., a Python script using the Admin SDK),
+ *   which bypasses these security rules. This is the most secure posture for a
+ *   data-ingestion-and-display application.
+ * - No User-Specific Data: The ruleset does not contain any logic related to user
+ *   authentication (`request.auth`), as the data model is entirely public and contains
+ *   no user-owned content.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function hasAdminRoleDoc() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isListedAdminEmail() {
+      return isSignedIn() &&
+        request.auth.token.email != null &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.token.email));
+    }
+
+    function isAdmin() {
+      return hasAdminRoleDoc() || isListedAdminEmail();
+    }
+
+    /**
+     * @description Allows any user to read stock analysis data, but denies all write operations.
+     * @path /stock_analysis/{stockId}
+     * @allow (get, list) An anonymous user can read stock analysis documents.
+     * @deny (write) Any user, authenticated or not, is blocked from creating, updating, or deleting documents.
+     * @principle Protects data integrity by disallowing all client-side writes. Data is assumed to be managed by a trusted backend service.
+     */
+    match /stock_analysis/{stockId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /meta_data/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    /**
+     * @description Allows authenticated users to read/write their own data (profile, settings).
+     * @path /users/{userId}
+     * @allow (read, write) Users can only access their own document and subcollections.
+     */
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /users/{userId}/{document=**} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * @description Admin List for verification.
+     * @path /admins/{email}
+     * @allow (get) Authenticated users can check if their email exists in this list.
+     * @deny (write) Strictly prohibited from client-side.
+     */
+    match /admins/{email} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // Bot account dashboard (admin only)
+    match /bot_account_snapshot/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /bot_trade_logs/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /bot_portfolio/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+  }
+}
