@@ -83,7 +83,10 @@ const getStatusColor = (status) => {
   if (!status) return 'text-gray-500';
   const text = String(status);
   if (/매도|SELL|sell/i.test(text)) return 'text-red-600 font-bold';
-  if (/주의|관망|BUY|buy|watch|대기/i.test(text)) return 'text-yellow-600 font-bold';
+  if (/관망|대기|주의|BUY|buy|watch/i.test(text)) return 'text-yellow-600 font-bold';
+  if (/squeeze|응축|스퀴즈/i.test(text)) return 'text-violet-600 font-bold';
+  if (/normal|일반/i.test(text)) return 'text-emerald-600 font-bold';
+  if (/suspended|거래정지|suspend/i.test(text)) return 'text-slate-500 font-bold';
   if (/N\/A|데이터 없음|없음|insufficient/i.test(text)) {
     return 'text-slate-400 font-bold bg-slate-100 px-1 rounded';
   }
@@ -126,7 +129,13 @@ const SidebarItem = React.memo(({ stock, isSelected, onClick, isLoggedIn }) => {
               ? 'bg-red-50 border-red-200 text-red-600'
               : /관망|대기|주의|watch|buy|BUY/i.test(String(displayStatus))
                 ? 'bg-yellow-50 border-yellow-200 text-yellow-600'
-                : 'bg-gray-50 border-gray-200 text-gray-500'
+                : /squeeze|응축|스퀴즈/i.test(String(displayStatus))
+                  ? 'bg-violet-50 border-violet-200 text-violet-600'
+                  : /normal|일반/i.test(String(displayStatus))
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
+                    : /suspended|거래정지|suspend/i.test(String(displayStatus))
+                      ? 'bg-slate-100 border-slate-300 text-slate-500'
+                      : 'bg-gray-50 border-gray-200 text-gray-500'
           }`}
         >
           {displayType.toUpperCase()}
@@ -170,7 +179,16 @@ const DEFAULT_CHART_CONFIG = {
   yAxis: { show: true, format: 'simple' }
 };
 const DEFAULT_PATTERNS = ['squeeze', 'buy_signal', 'sell_signal', 'normal', 'suspended'];
-const DEFAULT_SORT = { key: 'bandwidth', direction: 'asc' };
+const SORT_PREFERENCE = {
+  bandwidth: 'asc',  // 좁을수록 우선
+  marcap: 'desc',    // 클수록 우선
+  percentB: 'desc',  // 클수록 우선
+  volume: 'desc',    // 클수록 우선
+};
+
+const getPreferredSortDirection = (key) => SORT_PREFERENCE[key] || 'asc';
+
+const DEFAULT_SORT = { key: 'bandwidth', direction: getPreferredSortDirection('bandwidth') };
 const DEFAULT_MARKET = 'KR';
 const DEFAULT_ZOOM = 'ALL';
 
@@ -718,11 +736,14 @@ export default function BollingerScanner() {
       }
   };
 
-  const getStatusColor = (status) => {
+    const getStatusColor = (status) => {
     if (!status) return 'text-gray-500';
     const text = String(status);
     if (/매도|SELL|sell/i.test(text)) return 'text-red-600 font-bold';
-    if (/주의|관망|BUY|buy|watch|대기/i.test(text)) return 'text-yellow-600 font-bold';
+    if (/관망|대기|주의|BUY|buy|watch/i.test(text)) return 'text-yellow-600 font-bold';
+    if (/squeeze|응축|스퀴즈/i.test(text)) return 'text-violet-600 font-bold';
+    if (/normal|일반/i.test(text)) return 'text-emerald-600 font-bold';
+    if (/suspended|거래정지|suspend/i.test(text)) return 'text-slate-500 font-bold';
     if (/N\/A|데이터 없음|없음|insufficient/i.test(text)) return 'text-blue-600 font-bold';
     return 'text-gray-500';
   };
@@ -922,7 +943,7 @@ export default function BollingerScanner() {
         <div className="p-6 border-b border-gray-200 bg-slate-900 text-white">
           <h1 className="text-xl font-bold flex items-center gap-2">
             <Activity className="text-yellow-400" />
-            Bollinger Hunter
+            MESUGAK
           </h1>
           <div className="mt-2 flex justify-between items-end">
             <p className="text-xs text-slate-400">AI 스캐너 결과 ({stocks.length})</p>
@@ -1029,7 +1050,13 @@ export default function BollingerScanner() {
                  ].map(s => (
                     <button
                         key={s.id}
-                        onClick={() => setSortConfig(prev => ({ ...prev, key: s.id }))}
+                        onClick={() =>
+                          setSortConfig(prev => ({
+                            ...prev,
+                            key: s.id,
+                            direction: getPreferredSortDirection(s.id),
+                          }))
+                        }
                         className={`flex-1 text-[10px] rounded border transition-all ${
                             sortConfig.key === s.id
                             ? 'bg-blue-50 text-blue-600 border-blue-200 font-bold'
@@ -1408,4 +1435,6 @@ export default function BollingerScanner() {
     </div>
   );
 }
+
+
 
