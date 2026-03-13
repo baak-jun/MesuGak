@@ -7,6 +7,7 @@ from typing import Optional
 import firebase_admin
 from dotenv import load_dotenv
 from firebase_admin import credentials, firestore
+from google.cloud.firestore_v1 import FieldFilter
 
 try:
     from zoneinfo import ZoneInfo
@@ -53,8 +54,8 @@ def run_refresh(db, market: str, dry_run: bool = False):
     date = kst_today()
     signals = (
         db.collection("stock_analysis")
-        .where("type", "==", "buy_signal")
-        .where("market", "==", market)
+        .where(filter=FieldFilter("type", "==", "buy_signal"))
+        .where(filter=FieldFilter("market", "==", market))
         .stream()
     )
 

@@ -34,6 +34,22 @@ mesugak/
   firestore.rules
 ```
 
+## 스크린샷
+
+### 상태 예시
+
+**Buy Signal**
+
+![Buy Signal](src/assets/buy_signal.png)
+
+**Normal**
+
+![Normal](src/assets/normal.png)
+
+**Squeeze**
+
+![Squeeze](src/assets/squeeze.png)
+
 ## 처음부터 Firebase 프로젝트 만들기
 
 ### 1) 사전 준비
