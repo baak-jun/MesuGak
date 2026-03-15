@@ -1,6 +1,6 @@
 # MesuGak
 
-MesuGak은 볼린저밴드 기반 매수 신호를 Firestore에 반영하고, 장 마감 후 `pending_orders`를 자동 갱신하는 Firebase 기반 서비스입니다.
+MesuGak은 볼린저밴드 기반 매수 신호 분석해주는 서비스입니다.
 
 ## 핵심 기능
 
