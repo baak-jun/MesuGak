@@ -11,10 +11,10 @@ import {
   Eye, EyeOff, Check, Search, Lock, LogOut, Wallet, RefreshCw, FileText
 } from 'lucide-react';
 
-// ???샑???醫???
+// Landing page
 import LandingPage from './LandingPage'; 
 
-// [?怨뺥넪??] ??醫롫윥??嶺뚮∥???낆?? ?뺢퀡?녻굢???醫???
+// Auth error messages
 const getErrorMessage = (code) => {
     switch (code) {
         case 'auth/user-not-found':
@@ -38,7 +38,7 @@ const getErrorMessage = (code) => {
 };
 
 // =================================================================
-// [1] ??ｋ걠??????醫???
+// [1] Shared helpers
 // =================================================================
 const getExternalLink = (id) => {
   if (/^\d+$/.test(id)) return `https://finance.naver.com/item/main.naver?code=${id}`;
@@ -48,7 +48,7 @@ const getExternalLink = (id) => {
 const CustomTooltip = ({ active, payload, label, market }) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
-    // ??醫롫윪???醫롫짗?? ??醫????醫롫짗?? 嶺뚳퐢?얍칰?
+    // Ignore tooltip rows without OHLC data.
     if (!data || data.open === undefined) return null;
 
     const isUS = market === 'US';
@@ -77,7 +77,7 @@ const CustomTooltip = ({ active, payload, label, market }) => {
 };
 
 // =================================================================
-// [2] ??醫롫윪???醫롫윥????醫롫윪???(React.memo 嶺뚣끉裕???
+// [2] Sidebar item
 // =================================================================
 const getStatusColor = (status) => {
   if (!status) return 'text-gray-500';
@@ -106,8 +106,35 @@ const normalizeStatusText = (status, type) => {
   return raw;
 };
 
+const getStockMarket = (stock, fallbackMarket = null) => {
+  const stockId = String(stock?.id ?? '').trim().toUpperCase();
+  const rawId = stockId.replace(/^KR_|^US_/, '');
+
+  if (stockId.startsWith('KR_')) return 'KR';
+  if (stockId.startsWith('US_')) return 'US';
+  if (/^\d{4,6}$/.test(rawId)) return 'KR';
+  if (/^[A-Z][A-Z0-9.\-]*$/.test(rawId)) return 'US';
+
+  const explicitMarket = String(stock?.market ?? '').toUpperCase();
+  if (explicitMarket === 'KR' || explicitMarket === 'US') return explicitMarket;
+
+  if (fallbackMarket === 'KR' || fallbackMarket === 'US') return fallbackMarket;
+
+  return null;
+};
+
+const normalizeStock = (stock, fallbackMarket = null) => {
+  const resolvedMarket = getStockMarket(stock, fallbackMarket);
+  if (!resolvedMarket) return null;
+
+  return {
+    ...stock,
+    resolvedMarket,
+  };
+};
+
 const SidebarItem = React.memo(({ stock, isSelected, onClick, isLoggedIn }) => {
-  // [?곌랜?삯뇡? ?β돦裕????????롪퍔??? sell_signal??squeeze????醫롫윪??
+  // Non-admin users should not see sell-signal details.
   const isHidden = !isLoggedIn && stock.type === 'sell_signal';
   
   const displayType = isHidden ? 'squeeze' : stock.type;
@@ -156,10 +183,10 @@ const SidebarItem = React.memo(({ stock, isSelected, onClick, isLoggedIn }) => {
 });
 
 // =================================================================
-// [3] 嶺뚮∥??????샑???醫???
+// [3] Ads and chart defaults
 // =================================================================
 
-// [?怨뺥넪??] ??⑹탪???꾩룄?←몭????샑???醫???
+// Ad placeholder
 const AdBanner = ({ position, className }) => {
   return (
     <div className={`bg-gray-200 flex items-center justify-center text-gray-400 text-xs border border-gray-300 ${className}`}>
@@ -168,12 +195,14 @@ const AdBanner = ({ position, className }) => {
   );
 };
 
-// [?怨뺥넪??] ?リ옇?????醫롫윪????醫롫윪??
+// Chart rendering defaults
 const DEFAULT_CHART_CONFIG = {
   close: { show: true, color: '#334155', width: 2 },
   ma20: { show: true, color: '#f59e0b', width: 1.5 },
   upper: { show: true, color: '#64748b', width: 2 },
   lower: { show: true, color: '#64748b', width: 2 },
+  rsi: { show: true, color: '#0f766e', width: 1.5 },
+  rsiSignal: { show: true, color: '#f97316', width: 1.5 },
   candle: { show: true, upColor: '#16a34a', downColor: '#dc2626', wickWidth: 1, bodySize: 8 },
   highLow: { show: true },
   yAxis: { show: true, format: 'simple' }
@@ -195,9 +224,10 @@ const DEFAULT_ZOOM = 'ALL';
 export default function BollingerScanner() {
   const [selectedStock, setSelectedStock] = useState(null);
   const [stocks, setStocks] = useState([]);
-  const [loading, setLoading] = useState(false); // [??醫롫윪?? ?貫?껆뵳寃쇰쐻?false (?β돦裕??????β돦裕녽???醫롫윪??
+  const detailRequestRef = useRef(0);
+  const [loading, setLoading] = useState(false);
 
-  // [?怨뺥넪??] ??醫롫윪凉???醫?繹?
+  // Auth/user state
   const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState(null); // 'member', 'user', 'admin'
   // derived state for convenience
@@ -205,29 +235,29 @@ export default function BollingerScanner() {
   const isApproved = ['user', 'admin'].includes(userRole);
   
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [isSignup, setIsSignup] = useState(false); // [?怨뺥넪??] ??醫롫윪???쾸???嶺뚮ㅄ維獄?
+  const [isSignup, setIsSignup] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
 
-  // [?怨뺥넪??] 嶺뚢뼰維????醫롫윪????醫?繹?
+  // Chart settings
   const [showSettings, setShowSettings] = useState(false);
   const [chartConfig, setChartConfig] = useState(DEFAULT_CHART_CONFIG);
   const [priceView, setPriceView] = useState('candle'); // 'candle' | 'line'
 
-  // [?怨뺥넪??] ????醫롫윪?????醫??묕퐛?? ??醫?繹?
+  // Chart range and prepared data
   const [zoomRange, setZoomRange] = useState(DEFAULT_ZOOM); // '1M', '3M', '6M', 'ALL'
   const [visualData, setVisualData] = useState([]);
 
-  // [?怨뺥넪??] ??醫?????醫?繹?
+  // Filters and sorting
   const [selectedMarket, setSelectedMarket] = useState(DEFAULT_MARKET); // 'KR' | 'US'
   const [selectedPatterns, setSelectedPatterns] = useState(DEFAULT_PATTERNS);
   const [sortConfig, setSortConfig] = useState(DEFAULT_SORT);
 
-  // [?怨뺥넪??] Y???뺢퀡???domain) ??醫?繹?(??醫롫짗?? ??????μ쪠???
+  // Y-axis display state
   const [yDomain, setYDomain] = useState(['auto', 'auto']);
-  const [yTicks, setYTicks] = useState([]); // [?怨뺥넪??] ??ｌ뫒亦??Y????醫롫윞??
+  const [yTicks, setYTicks] = useState([]);
 
-  // [?怨뺥넪??] 嶺뚢뼰維????醫롫윥?臾덈쐻?繞벿뮻????醫?繹?(Layout Thrashing ?꾩렮維??)
+  // Chart layout/runtime state
   const [chartReady, setChartReady] = useState(false);
   const [botAccount, setBotAccount] = useState(null);
   const [botTradeLogs, setBotTradeLogs] = useState([]);
@@ -238,28 +268,28 @@ export default function BollingerScanner() {
   const chartHostRef = useRef(null);
   const [chartWidth, setChartWidth] = useState(0);
 
-  // selectedStock/zoomRange changes update visualData and chart-ready state.
+  // 선택 종목이나 확대 범위가 바뀌면 차트 데이터를 다시 준비합니다.
   useEffect(() => {
     console.log("Selected Stock Updated:", selectedStock);
-    setChartReady(false); // ??醫롫윪????꾩룆????????醫롫윥??嶺뚢뼰維????醫롫짗??
+    setChartReady(false);
     
     if (selectedStock?.history) {
       console.log("History found, applying zoom...", selectedStock.history.length);
       applyZoom(selectedStock.history, zoomRange);
-      // DOM ??醫롫윪???醫롫윪?????醫?????醫롫윞?????(Recharts width error ?꾩렮維??)
+      // 차트 컨테이너의 폭이 잡힌 뒤 렌더링되도록 잠시 대기합니다.
       setTimeout(() => {
           console.log("Setting chartReady to true");
           setChartReady(true);
       }, 200); 
     } else {
       console.warn("No history found for selected stock");
-      setVisualData([]); // fallback when selected stock has no history
+      setVisualData([]); // 히스토리가 없으면 빈 차트로 처리
     }
   }, [selectedStock, zoomRange]);
 
 
 
-  // Recompute Y-axis domain/ticks from currently visible chart data.
+  // 현재 보이는 데이터 기준으로 Y축 범위와 눈금을 다시 계산합니다.
   useEffect(() => {
     if (!visualData || visualData.length === 0) return;
 
@@ -267,7 +297,7 @@ export default function BollingerScanner() {
     let max = -Infinity;
 
     visualData.forEach(d => {
-      // 嶺뚮ㅄ維獄??낅슣???嶺뚯솘???醫롫짗?? ??μ쪚???醫롫윪??嶺뚣끉裕??嶺뚣끉裕??????醫롫윪??
+      // 종가, 고가/저가, 밴드 값을 모두 포함해 표시 범위를 계산합니다.
       const values = [d.close, d.high, d.low, d.upper, d.lower, d.ma20];
       values.forEach(v => {
         if (v !== undefined && v !== null && !isNaN(v)) {
@@ -283,7 +313,7 @@ export default function BollingerScanner() {
         return;
     }
 
-    // [??醫롫윪?? "Nice Number" ??醫롫윞??逾?凉???醫롫윪??(50, 100, 500 ??醫롫윪??껊쐻???醫롫윪?됯퉵彛???
+    // 최소/최대값에 약간의 여유를 두고 보기 좋은 눈금을 만듭니다.
     const padding = (max - min) * 0.05;
     const roughMin = min - padding;
     const roughMax = max + padding;
@@ -293,7 +323,7 @@ export default function BollingerScanner() {
     setYDomain([ticks[0], ticks[ticks.length - 1]]);
   }, [visualData]);
 
-  // [?怨뺥넪??] Nice Ticks ??ｌ뫒亦???醫롫윪??
+  // 보기 좋은 간격의 눈금을 만드는 유틸리티입니다.
   const calculateNiceTicks = (min, max, tickCount) => {
     const range = niceNum(max - min, false);
     const tickSpacing = niceNum(range / (tickCount - 1), true);
@@ -326,19 +356,19 @@ export default function BollingerScanner() {
     return niceFraction * Math.pow(10, exponent);
   };
 
-  // [?怨뺥넪??] Y????醫롫윥?????醫롫윪??
+  // Y축 라벨 포맷터
   const formatYAxis = (value) => {
     if (chartConfig.yAxis.format === 'full') {
         const isUS = selectedStock?.market === 'US';
         return isUS ? `$${value.toLocaleString()}` : value.toLocaleString();
     }
     
-    // 亦껋꼶????낅슣?????'?? ??醫롫윪????醫롫윪??????(??醫롫윥????醫롫윪??
+    // 미국 주식은 축약 표시에서도 달러 기호를 유지합니다.
     if (selectedStock?.market === 'US') {
         return `$${value.toLocaleString()}`;
     }
 
-    // ??醫롫윞???낅슣??? '?? ??醫롫윪????醫롫윪??
+    // 한국 주식은 축약 표시에서 만원 단위를 사용합니다.
     if (value >= 10000) {
         return `${(value / 10000).toFixed(2)}만`;
     }
@@ -355,7 +385,7 @@ export default function BollingerScanner() {
       return;
     }
     
-    // ... (rest of applyZoom remains same, just ensuring context match)
+    // 선택된 기간만 남기도록 마지막 날짜 기준으로 필터링합니다.
     
     const lastDate = new Date(data[data.length - 1].date);
     let subtractDays = 0;
@@ -370,14 +400,10 @@ export default function BollingerScanner() {
     setVisualData(filtered);
   };
   
-// ... (rest of configuration functions)
-
-// ...
-
                          {chartConfig.yAxis.show && (
                             <YAxis 
                                 domain={yDomain} 
-                                tickCount={8} // ???띠룇裕??嶺뚯빘鍮??
+                                tickCount={8} // 눈금 수 고정
                                 tick={{fontSize: 11, fill: '#94a3b8'}} 
                                 tickFormatter={formatYAxis} 
                                 axisLine={false} tickLine={false} width={60} 
@@ -414,6 +440,61 @@ export default function BollingerScanner() {
       candleDebugLoggedRef.current = true;
       console.log('candle-data-sample', rows[0]);
     }
+    return rows;
+  }, [visualData]);
+
+  const rsiData = React.useMemo(() => {
+    const period = 14;
+    const signalPeriod = 9;
+    const rows = (visualData || []).map((d) => ({
+      ...d,
+      rsi: null,
+      rsiSignal: null,
+      rsiUpper: 70,
+      rsiMid: 50,
+      rsiLower: 30,
+    }));
+
+    if (rows.length <= period) return rows;
+
+    let gains = 0;
+    let losses = 0;
+
+    for (let i = 1; i <= period; i += 1) {
+      const change = Number(rows[i].close) - Number(rows[i - 1].close);
+      if (Number.isNaN(change)) continue;
+      if (change >= 0) gains += change;
+      else losses += Math.abs(change);
+    }
+
+    let avgGain = gains / period;
+    let avgLoss = losses / period;
+    rows[period].rsi = avgLoss === 0 ? 100 : 100 - (100 / (1 + (avgGain / avgLoss)));
+
+    for (let i = period + 1; i < rows.length; i += 1) {
+      const change = Number(rows[i].close) - Number(rows[i - 1].close);
+      const gain = Number.isNaN(change) ? 0 : Math.max(change, 0);
+      const loss = Number.isNaN(change) ? 0 : Math.max(-change, 0);
+
+      avgGain = ((avgGain * (period - 1)) + gain) / period;
+      avgLoss = ((avgLoss * (period - 1)) + loss) / period;
+
+      rows[i].rsi = avgLoss === 0 ? 100 : 100 - (100 / (1 + (avgGain / avgLoss)));
+    }
+
+    for (let i = 0; i < rows.length; i += 1) {
+      if (i < period + signalPeriod - 1) continue;
+
+      const window = rows
+        .slice(i - signalPeriod + 1, i + 1)
+        .map((row) => row.rsi)
+        .filter((value) => value !== null && value !== undefined && !Number.isNaN(value));
+
+      if (window.length === signalPeriod) {
+        rows[i].rsiSignal = window.reduce((sum, value) => sum + value, 0) / signalPeriod;
+      }
+    }
+
     return rows;
   }, [visualData]);
 
@@ -493,15 +574,15 @@ export default function BollingerScanner() {
   }, [selectedStock, showSettings]);
 
 
-  // Load account role/settings on auth state changes.
+  // 인증 상태가 바뀌면 사용자 권한과 저장된 설정을 불러옵니다.
   useEffect(() => {
       const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
           setUser(currentUser);
           if (currentUser) {
               console.log("Logged in:", currentUser.email);
-              // Firestore??醫롫윪????醫롫윪????雅?굝??뇡??釉띾쐞???醫롫윞??
+              // Firestore에서 역할과 저장된 설정을 조회합니다.
               try {
-                  // 1. 雅?굝??뇡?Role) ??醫롫윪??('users' ??롫맩???
+                  // 1. 기본 사용자 문서: users/{uid}
                   const userDocRef = doc(db, "users", currentUser.uid);
                   const userDocSnap = await getDoc(userDocRef);
                   
@@ -510,7 +591,7 @@ export default function BollingerScanner() {
                       if (data.role) setUserRole(data.role || 'member');
                       setBotPermissionDenied(false);
                   } else {
-                      // ??쒖굣?묐슗泥? ??醫롫윪???쐻??リ옇?????醫롫윪??(member)
+                      // 첫 로그인 사용자면 기본 프로필을 생성합니다.
                       await setDoc(userDocRef, {
                           email: currentUser.email,
                           role: 'member',
@@ -520,7 +601,7 @@ export default function BollingerScanner() {
                       setBotPermissionDenied(false);
                   }
 
-                  // 2. ??醫롫윪???釉띾쐞???醫롫윞??('users/{uid}/settings/mesugak')
+                  // 2. 사용자별 스캐너 설정
                   const settingsDocRef = doc(db, "users", currentUser.uid, "settings", "mesugak");
                   const settingsDocSnap = await getDoc(settingsDocRef);
                   if (settingsDocSnap.exists()) {
@@ -537,6 +618,8 @@ export default function BollingerScanner() {
                           ma20: { ...DEFAULT_CHART_CONFIG.ma20, ...(data.chartConfig.ma20 || {}) },
                           upper: { ...DEFAULT_CHART_CONFIG.upper, ...(data.chartConfig.upper || {}) },
                           lower: { ...DEFAULT_CHART_CONFIG.lower, ...(data.chartConfig.lower || {}) },
+                          rsi: { ...DEFAULT_CHART_CONFIG.rsi, ...(data.chartConfig.rsi || {}) },
+                          rsiSignal: { ...DEFAULT_CHART_CONFIG.rsiSignal, ...(data.chartConfig.rsiSignal || {}) },
                           candle: { ...DEFAULT_CHART_CONFIG.candle, ...(data.chartConfig.candle || {}) },
                           highLow: { ...DEFAULT_CHART_CONFIG.highLow, ...(data.chartConfig.highLow || {}) },
                           yAxis: { ...DEFAULT_CHART_CONFIG.yAxis, ...(data.chartConfig.yAxis || {}) },
@@ -564,7 +647,7 @@ export default function BollingerScanner() {
       return () => unsubscribe();
   }, []);
 
-  // 2. ??醫롫윪????醫롫윥??????(Debounce ??醫롫윪???띠룄????醫롫윞???곌떠?????醫롫윥壤??????- ??醫롫윪?遺룹쾸? 嶺뚮씭??? ??醫롫윪??뀁쾵???
+  // 쓰기 횟수를 줄이기 위해 설정 저장은 짧게 디바운스합니다.
   useEffect(() => {
       if (!user) return;
       
@@ -585,20 +668,19 @@ export default function BollingerScanner() {
           }
       };
       
-      // ?곌떠????띠룆??? ??????(??醫롫윥甸???? ?????꾩렮維??????醫???1????醫롫윥???醫롫윪????醫롫윪??雅?굝????醫롫윥?? ??醫롫윞????β돦裕뉐퐲???醫롫윪???
       const timeout = setTimeout(saveSettings, 500);
       return () => clearTimeout(timeout);
   }, [user, selectedMarket, selectedPatterns, sortConfig, chartConfig, zoomRange, priceView]);
 
-  // 3. Login/signup submit handler.
+  // 이메일 로그인/회원가입 제출 처리
   const handleAuthSubmit = async (e) => {
       e.preventDefault();
       try {
           if (isSignup) {
-              // ??醫롫윪???쾸?????醫롫윪?????醫롫윪??嶺뚯솘???醫롫윪????醫롫윪??(??醫?繹??醫????醫롫윥????醫롫짗????醫롫윪????醫???
+              // 브라우저 세션이 끝나면 인증도 종료되도록 세션 지속성을 사용합니다.
               await setPersistence(auth, browserSessionPersistence);
               const userCredential = await createUserWithEmailAndPassword(auth, loginEmail, loginPassword);
-              // ??醫롫윪???쾸??????リ옇???雅?굝??뇡?먰떊??ㅲ뵛 (role: 'member')
+              // 신규 사용자는 기본적으로 member 권한입니다.
               await setDoc(doc(db, "users", userCredential.user.uid), {
                   email: loginEmail,
                   role: 'member',
@@ -606,7 +688,7 @@ export default function BollingerScanner() {
               });
               alert("회원가입이 완료되었습니다. 로그인해 주세요.");
           } else {
-              // ?β돦裕?????嶺뚯솘???醫롫윪????醫롫윪??
+              // 이메일 로그인도 동일하게 세션 지속성을 사용합니다.
               await setPersistence(auth, browserSessionPersistence);
               await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
           }
@@ -619,14 +701,14 @@ export default function BollingerScanner() {
       }
   };
 
-  // Google login handler.
+  // Google 로그인 처리
   const handleGoogleLogin = async () => {
       try {
           await setPersistence(auth, browserSessionPersistence);
           const result = await signInWithPopup(auth, googleProvider);
           const user = result.user;
           
-          // ??醫롫윪?????쒖굣????醫롫윪??????醫롫윪??
+          // Google 첫 로그인 시 사용자 문서를 생성합니다.
           const userDocRef = doc(db, "users", user.uid);
           const userDocSnap = await getDoc(userDocRef);
           
@@ -652,11 +734,11 @@ export default function BollingerScanner() {
       }
   };
 
-  // ResizeObserver ?β돦裕뉐퐲???醫롫윞??(??醫롫윪???
+  // 차트 영역 폭을 컨테이너 크기에 맞춰 동기화합니다.
 
 
   useEffect(() => {
-    // Skip data fetch when logged out.
+    // 로그아웃 상태에서는 목록을 비웁니다.
     if (!user) {
         setStocks([]);
         return;
@@ -665,7 +747,7 @@ export default function BollingerScanner() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        // [嶺뚣끉裕??? ??醫롫윪???洹먮봾裕??醫롫윥壤??釉띾쐞???醫롫윞??(Read ?????99.9% ??醫롫윞??
+        // meta_data 컬렉션에서 목록용 요약 데이터를 읽어옵니다.
         const q = query(collection(db, "meta_data")); 
         const querySnapshot = await getDocs(q);
         
@@ -677,7 +759,11 @@ export default function BollingerScanner() {
             }
         });
 
-        // ?꾩룆?獄????る궡?? ??醫롫윪????醫롫윥??(?? 濾곌쑨????醫롫짗????????醫롫윥餓?
+        allStocks = allStocks
+          .map(normalizeStock)
+          .filter(Boolean);
+
+        // 거래정지 종목은 뒤로 보내고, 그다음 밴드폭으로 정렬합니다.
         allStocks.sort((a, b) => {
           const aStatus = normalizeStatusText(a.status, a.type);
           const bStatus = normalizeStatusText(b.status, b.type);
@@ -689,7 +775,7 @@ export default function BollingerScanner() {
         });
         setStocks(allStocks);
         
-        // ???뺢퀡?????リ턁????醫롫윥????醫?繹?(??醫롫윪???β돦裕녽?
+        // 최초 로드 후 첫 종목을 기본 선택합니다.
         if (allStocks.length > 0) {
              handleStockClick(allStocks[0]);
         }
@@ -702,31 +788,44 @@ export default function BollingerScanner() {
     fetchData();
   }, [user]);
 
-  // [?怨뺥넪??] ??リ턁????醫롫윥????醫롫윥獄??(??醫롫윪????醫롫윪???Lazy Loading)
+  // 종목 선택 시 상세 데이터는 지연 로딩합니다.
   const handleStockClick = async (summaryStock) => {
-      // 1. ??醫롫짗?? ??醫롫윪???醫롫윥????醫롫윪???띠럾? ??醫롫윥???롪퍔??????꾩룆?餓???醫?繹?
+      const requestId = ++detailRequestRef.current;
+
+      // 이미 history가 있으면 그대로 사용합니다.
       if (summaryStock.history) {
           setSelectedStock(summaryStock);
           return;
       }
 
-      // 2. Lazy-load detail payload from Firestore.
+      // Firestore에서 상세 payload를 지연 로딩합니다.
       try {
           console.log("Fetching details for:", summaryStock.id);
-          // ?β돦裕녽???醫?繹???醫롫윪??띕쐻???醫?????醫롫윪????醫롫윪??(嶺뚢뼰維???β돦裕녽???醫??????醫롫윥??
+          // 상세 로딩 중에도 요약 정보는 즉시 화면에 보여줍니다.
           setSelectedStock({ ...summaryStock, history: null }); 
 
           const docRef = doc(db, "stock_analysis", summaryStock.id);
           const docSnap = await getDoc(docRef);
 
+          if (requestId !== detailRequestRef.current) {
+              return;
+          }
+
           if (docSnap.exists()) {
               const fullData = docSnap.data();
               console.log("Fetched Data:", fullData);
-              const mergedData = { ...summaryStock, ...fullData };
+              const mergedData = normalizeStock(
+                { ...summaryStock, ...fullData },
+                summaryStock.resolvedMarket
+              ) || {
+                ...summaryStock,
+                ...fullData,
+                resolvedMarket: summaryStock.resolvedMarket,
+              };
               
               setSelectedStock(mergedData);
               
-              // Keep the list pane in sync with the fetched full detail.
+              // 상세 데이터를 받아오면 리스트 캐시도 함께 갱신합니다.
               setStocks(prev => prev.map(s => s.id === summaryStock.id ? mergedData : s));
           } else {
               console.error("No such document!");
@@ -753,24 +852,8 @@ export default function BollingerScanner() {
     window.open(url, '_blank');
   };
 
-  // [??醫롫윪?? ??醫??묕퐛??& ??醫롫윥???β돦裕뉐퐲?(useMemo??嶺뚣끉裕???
-  const filteredStocks = React.useMemo(() => {
-      // 1. Base filtering
-      let result = stocks.filter(stock => {
-          // 嶺뚮씭?????醫???
-          const market = stock.id.startsWith('KR_') ? 'KR' : 'US';
-          if (market !== selectedMarket) return false;
-          // Non-admin users should treat sell signals as squeeze for visibility/filtering.
-          let effectiveType = stock.type;
-          if (!isAdmin && stock.type === 'sell_signal') {
-              effectiveType = 'squeeze';
-          }
-          
-          if (!selectedPatterns.includes(effectiveType)) return false;
-          return true;
-      });
-
-      // 2. ??醫롫윥??
+  const sortStocks = (items) => {
+      const result = [...items];
       result.sort((a, b) => {
           const aStatus = normalizeStatusText(a.status, a.type);
           const bStatus = normalizeStatusText(b.status, b.type);
@@ -778,7 +861,8 @@ export default function BollingerScanner() {
           const bSuspended = b.type === 'suspended' || /거래정지|suspend/i.test(bStatus) ? 1 : 0;
           if (aSuspended !== bSuspended) return aSuspended - bSuspended;
 
-          let valA, valB;
+          let valA = 0;
+          let valB = 0;
 
           if (sortConfig.key === 'bandwidth') {
               valA = a.bandwidth;
@@ -798,17 +882,62 @@ export default function BollingerScanner() {
           if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
           return 0;
       });
-
       return result;
-  }, [stocks, selectedMarket, selectedPatterns, sortConfig, isAdmin]);
+  };
 
-  // ??醫롫윥獄?? ??醫?????醫롫짗??
+  // 사이드바 목록을 시장별로 분리해 관리합니다.
+  const marketStocks = React.useMemo(() => {
+      const buckets = { KR: [], US: [] };
+
+      stocks.forEach(stock => {
+          const market = stock.resolvedMarket;
+          if (market !== 'KR' && market !== 'US') return;
+
+          let effectiveType = stock.type;
+          if (!isAdmin && stock.type === 'sell_signal') {
+              effectiveType = 'squeeze';
+          }
+
+          if (!selectedPatterns.includes(effectiveType)) return;
+          buckets[market].push(stock);
+      });
+
+      return {
+          KR: sortStocks(buckets.KR),
+          US: sortStocks(buckets.US),
+      };
+  }, [stocks, selectedPatterns, sortConfig, isAdmin]);
+
+  const filteredStocks = marketStocks[selectedMarket] || [];
+
+  useEffect(() => {
+      const selectedStockMarket = selectedStock?.resolvedMarket ?? getStockMarket(selectedStock);
+      const nextSelectedStock = filteredStocks.find(stock => stock.id === selectedStock?.id) ?? null;
+
+      if (filteredStocks.length === 0) {
+          if (selectedStock && selectedStockMarket !== selectedMarket) {
+              detailRequestRef.current += 1;
+              setSelectedStock(null);
+          }
+          return;
+      }
+
+      if (!selectedStock || selectedStockMarket !== selectedMarket || !nextSelectedStock) {
+          handleStockClick(filteredStocks[0]);
+          return;
+      }
+
+      if (nextSelectedStock !== selectedStock) {
+          setSelectedStock(nextSelectedStock);
+      }
+  }, [filteredStocks, selectedMarket, selectedStock]);
+
+  // 패턴 필터 칩 토글
   const togglePattern = (type) => {
       setSelectedPatterns(prev => {
           if (type === 'ALL') {
-              // ??醫롫윪????醫?繹???醫롫윪????醫롫짗??
               const all = ['squeeze', 'buy_signal', 'normal', 'suspended'];
-              if (isAdmin) all.push('sell_signal'); // ??㉱?洹먮봿???嶺뚮씞?뉒뙴袁?쐻???醫???
+              if (isAdmin) all.push('sell_signal');
               return all;
           }
           if (prev.includes(type)) return prev.filter(p => p !== type);
@@ -825,12 +954,12 @@ export default function BollingerScanner() {
     );
   }
 
-  // [?怨뺥넪??] ?β돦裕?????醫롫윪?議얜쐻???醫롫윥????醫롫윪?醫묒?? ??醫롫윪??
+  // 로그인 전 화면
   if (!user) {
       return (
           <>
             <LandingPage onLogin={() => setShowLoginModal(true)} />
-             {/* ?β돦裕???嶺뚮ㅄ維??(??醫롫윥????醫롫윪?醫묒????醫롫윪?????醫롫윪??????醫롫윪????? */}
+             {/* 로그인 모달 */}
             {showLoginModal && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fade-in">
                 <div className="bg-white p-6 rounded-lg shadow-xl w-80">
@@ -898,7 +1027,7 @@ export default function BollingerScanner() {
   }
 
 
-  // [?怨뺥넪??] ?β돦裕?????醫롫윪?????醫롫윪???醫롫짗?? ??醫롫짗?? ?롪퍔???(member) - ??醫롫윪????醫롫짗????醫롫윥??
+  // 로그인했지만 승인되지 않은 사용자 화면
   if (user && !isApproved) {
       return (
         <div className="flex h-screen items-center justify-center flex-col gap-6 bg-slate-50 p-6 text-center">
@@ -932,13 +1061,13 @@ export default function BollingerScanner() {
   return (
     <div className="flex flex-col h-screen bg-gray-50 overflow-hidden font-sans text-slate-800">
       
-      {/* 嶺뚮∥?????醫롫윪??(??レ뒩?쒌깺苑닺눧濡걔?+ ??醫롫윪???醫롫윥??+ ???쳜??λ쐻?+ ??醫롫윪?쒌깺苑닺눧濡걔? */}
+      {/* 메인 앱 레이아웃 */}
       <div className="flex flex-1 overflow-hidden">
         
-        {/* ??レ뒩????⑹탪??(??㉱?洹먮봿????醫롫윪????醫롫윪?? */}
+        {/* 좌측 배너 영역 */}
         {!isAdmin && <AdBanner position="LEFT" className="hidden 2xl:flex w-[160px] flex-shrink-0 border-r" />}
 
-        {/* ??醫롫윪???醫롫윥??*/}
+        {/* 사이드바 */}
         <div className="w-1/3 min-w-[320px] bg-white border-r border-gray-200 flex flex-col shadow-lg z-10">
         <div className="p-6 border-b border-gray-200 bg-slate-900 text-white">
           <h1 className="text-xl font-bold flex items-center gap-2">
@@ -946,7 +1075,7 @@ export default function BollingerScanner() {
             MESUGAK
           </h1>
           <div className="mt-2 flex justify-between items-end">
-            <p className="text-xs text-slate-400">AI 스캐너 결과 ({stocks.length})</p>
+            <p className="text-xs text-slate-400">AI 스캐너 결과 ({filteredStocks.length})</p>
             {user ? (
               <button onClick={handleLogout} className="text-xs text-slate-400 hover:text-white flex items-center gap-1">
                 <LogOut className="w-3 h-3" /> 로그아웃
@@ -989,14 +1118,18 @@ export default function BollingerScanner() {
           <p><strong>밴드폭(Bandwidth)</strong>이 낮을수록 수렴 구간 가능성이 큽니다.</p>
         </div>
         
-        {/* [?怨뺥넪??] ??醫???UI */}
+        {/* 필터 컨트롤 */}
         <div className="p-3 bg-white border-b border-gray-200 space-y-3">
-            {/* 嶺뚮씭?????醫?繹?*/}
+            {/* 시장 선택 */}
             <div className="flex rounded-md bg-gray-100 p-1">
                 {['KR', 'US'].map(m => (
                     <button 
                         key={m}
-                        onClick={() => setSelectedMarket(m)}
+                        onClick={() => {
+                          detailRequestRef.current += 1;
+                          setSelectedStock(null);
+                          setSelectedMarket(m);
+                        }}
                         className={`flex-1 text-sm py-1.5 rounded font-medium transition-all ${selectedMarket === m ? 'bg-white shadow text-slate-900' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         {m === 'KR' ? '한국 시장' : '미국 시장'}
@@ -1004,7 +1137,7 @@ export default function BollingerScanner() {
                 ))}
             </div>
 
-            {/* [??醫롫윪?? ??醫???嶺뚳퐢?얍칰類좎낯筌먦끇裕?(??醫롫윥?? */}
+            {/* 패턴 필터 */}
             <div className="flex gap-1 mb-2">
                 <button
                     onClick={() => togglePattern('ALL')}
@@ -1019,7 +1152,7 @@ export default function BollingerScanner() {
                     { id: 'normal', label: 'Normal' },
                     { id: 'suspended', label: 'Suspended' }
                 ].map(p => {
-                    // [?곌랜?삯뇡? 嶺뚮씞?뉒뙴袁?쾸?⑥궡?? ??㉱?洹먮봿?????醫롫윪??
+                    // 비관리자에게는 sell_signal 필터를 숨깁니다.
                     if (p.id === 'sell_signal' && !isAdmin) return null;
                     const isActive = selectedPatterns.includes(p.id);
                     return (
@@ -1039,9 +1172,9 @@ export default function BollingerScanner() {
                 })}
             </div>
 
-            {/* [?怨뺥넪??] ??醫롫윥????醫롫윪??(??醫롫윥?? */}
+            {/* 정렬 컨트롤 */}
             <div className="flex gap-1 items-stretch h-8">
-                 {/* ??醫롫윥???リ옇??? ??醫?繹?*/}
+                 {/* 정렬 기준 버튼 */}
                  {[
                     { id: 'bandwidth', label: 'Bandwidth' },
                     { id: 'marcap', label: 'Market Cap' },
@@ -1067,7 +1200,7 @@ export default function BollingerScanner() {
                     </button>
                  ))}
                  
-                 {/* ?꾩렮維싧젆???醫롫짗?? */}
+                 {/* 정렬 방향 */}
                  <button 
                     onClick={() => setSortConfig(prev => ({ ...prev, direction: prev.direction === 'asc' ? 'desc' : 'asc' }))}
                     className="w-8 flex items-center justify-center border border-gray-200 rounded bg-white text-gray-500 hover:text-slate-800"
@@ -1078,7 +1211,7 @@ export default function BollingerScanner() {
             </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div key={selectedMarket} className="flex-1 overflow-y-auto">
           {filteredStocks.length === 0 ? (
             <div className="p-10 text-center text-gray-400">조건에 맞는 종목이 없습니다.</div>
           ) : (
@@ -1088,7 +1221,7 @@ export default function BollingerScanner() {
                 stock={stock}
                 isSelected={selectedStock?.id === stock.id}
                 onClick={handleStockClick}
-                isLoggedIn={isAdmin} // [?곌랜?삯뇡? SideItem????㉱?洹먮봿????醫롫짗?? ??醫롫윥??(?????β돦裕뉐퐲??
+                isLoggedIn={isAdmin}
                 getStatusColor={getStatusColor}
               />
             ))
@@ -1096,7 +1229,7 @@ export default function BollingerScanner() {
         </div>
       </div>
 
-      {/* 嶺뚮∥?????醫롫윥??*/}
+      {/* 상세 패널 */}
       <div className="flex-1 min-w-0 min-h-0 flex flex-col h-full overflow-hidden bg-slate-50/50">
         {isAdmin && adminView === 'log' ? (
           <div className="flex-1 p-6 overflow-y-auto">
@@ -1213,6 +1346,8 @@ export default function BollingerScanner() {
                     { key: 'ma20', label: 'MA20' },
                     { key: 'upper', label: '상단밴드' },
                     { key: 'lower', label: '하단밴드' },
+                    { key: 'rsi', label: 'RSI' },
+                    { key: 'rsiSignal', label: 'RSI Signal' },
                   ].map((cfg) => (
                     <div key={cfg.key} className="flex items-center justify-between gap-2 bg-white border border-gray-200 rounded-lg p-2">
                       <button onClick={() => toggleConfig(cfg.key)} className={chartConfig[cfg.key].show ? 'text-slate-800' : 'text-gray-300'}>
@@ -1339,6 +1474,41 @@ export default function BollingerScanner() {
                     </ComposedChart>
                 ) : null}
               </div>
+              <div className="mt-3 h-[120px] rounded-xl border border-gray-200 bg-white p-3">
+                {rsiData?.length > 0 && chartWidth > 0 ? (
+                    <ComposedChart width={chartWidth} height={96} data={rsiData} margin={{ top: 4, right: 8, left: 4, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
+                      <XAxis dataKey="date" hide />
+                      <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#94a3b8' }} width={36} />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="rsiUpper" name="과매수 70" stroke="#ef4444" dot={false} strokeDasharray="4 4" strokeWidth={1} />
+                      <Line type="monotone" dataKey="rsiMid" name="중립 50" stroke="#cbd5e1" dot={false} strokeDasharray="3 3" strokeWidth={1} />
+                      <Line type="monotone" dataKey="rsiLower" name="과매도 30" stroke="#2563eb" dot={false} strokeDasharray="4 4" strokeWidth={1} />
+                      {chartConfig.rsi.show && (
+                        <Line
+                          type="monotone"
+                          dataKey="rsi"
+                          name="RSI(14)"
+                          stroke={chartConfig.rsi.color}
+                          dot={false}
+                          connectNulls={false}
+                          strokeWidth={chartConfig.rsi.width}
+                        />
+                      )}
+                      {chartConfig.rsiSignal.show && (
+                        <Line
+                          type="monotone"
+                          dataKey="rsiSignal"
+                          name="RSI Signal(9)"
+                          stroke={chartConfig.rsiSignal.color}
+                          dot={false}
+                          connectNulls={false}
+                          strokeWidth={chartConfig.rsiSignal.width}
+                        />
+                      )}
+                    </ComposedChart>
+                ) : null}
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
                 <div className="p-4 bg-slate-50 rounded-xl">
                   <p className="text-xs text-slate-500">상태</p>
@@ -1365,14 +1535,14 @@ export default function BollingerScanner() {
         )}
 
       </div>
-        {/* ??醫롫윪????⑹탪??(??㉱?洹먮봿????醫롫윪????醫롫윪?? */}
+        {/* 우측 배너 */}
         {!isAdmin && <AdBanner position="RIGHT" className="hidden 2xl:flex w-[160px] flex-shrink-0 border-l" />}
       </div>
 
-      {/* ??醫롫윥????⑹탪??(???醫롫짗????醫롫윪??/ ??㉱?洹먮봿????醫롫윪?? */}
+      {/* 모바일 하단 배너 */}
       {!isAdmin && <AdBanner position="BOTTOM" className="h-[90px] w-full flex-shrink-0 border-t z-20" />}
 
-      {/* ?β돦裕???嶺뚮ㅄ維??*/}
+      {/* 전역 모달 영역 */}
       {showLoginModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-xl w-80">

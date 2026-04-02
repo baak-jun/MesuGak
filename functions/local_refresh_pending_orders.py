@@ -2,7 +2,7 @@ import argparse
 import datetime as dt
 import os
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import firebase_admin
 from dotenv import load_dotenv
@@ -17,6 +17,13 @@ except Exception:  # pragma: no cover
 
 load_dotenv()
 load_dotenv(Path(__file__).with_name(".env"))
+
+
+def parse_markets(raw: Optional[str]) -> List[str]:
+    if raw is None:
+        return ["KR"]
+    markets = [part.strip().upper() for part in str(raw).split(",") if part.strip()]
+    return markets or ["KR"]
 
 
 def resolve_cred_path(explicit: Optional[str] = None) -> Path:
@@ -51,6 +58,7 @@ def kst_today() -> str:
 
 
 def run_refresh(db, market: str, dry_run: bool = False):
+    market = str(market).upper().strip()
     date = kst_today()
     signals = (
         db.collection("stock_analysis")
@@ -123,7 +131,9 @@ def main():
     args = build_parser().parse_args()
     cred_path = resolve_cred_path(args.cred_path)
     db = init_firestore(cred_path)
-    run_refresh(db, market=args.market, dry_run=args.dry_run)
+
+    for market in parse_markets(args.market):
+        run_refresh(db, market=market, dry_run=args.dry_run)
 
 
 if __name__ == "__main__":
