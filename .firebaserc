@@ -1,5 +1,7 @@
 {
-  "projects": {},
+  "projects": {
+    "staging": "studio-5459225470-8cee2"
+  },
   "targets": {
     "studio-5459225470-8cee2": {
       "hosting": {
