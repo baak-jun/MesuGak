@@ -26,7 +26,9 @@ except ImportError:  # pragma: no cover
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DEFAULT_RUNTIME_DIR = Path(os.getenv("BOT_RUNTIME_DIR", "/home/ubuntu/mesugak-runtime")).expanduser()
+
+# 실행 중인 스크립트 기준 상대 경로
+DEFAULT_RUNTIME_DIR = Path(os.getenv("BOT_RUNTIME_DIR", str(BASE_DIR / "runtime"))).expanduser()
 DEFAULT_CHECKPOINT_DIR = DEFAULT_RUNTIME_DIR / "checkpoints"
 DEFAULT_LOG_DIR = DEFAULT_RUNTIME_DIR / "logs"
 DEFAULT_LOCK_FILE = DEFAULT_RUNTIME_DIR / "oracle_chart_refresh.lock"
