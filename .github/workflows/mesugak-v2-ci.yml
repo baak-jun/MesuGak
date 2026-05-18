@@ -9,6 +9,8 @@ on:
 jobs:
   test-build:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: Mesugak_V2/functions
 
     steps:
       - uses: actions/checkout@v4
