@@ -10,10 +10,10 @@ runtime/
 # Local secrets
 .env
 .env.*
+!.env.example
 serviceAccountKey.json
 
 # Python
 __pycache__/
 *.py[cod]
 .pytest_cache/
-
