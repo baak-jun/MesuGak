@@ -1,0 +1,6 @@
+pandas
+numpy
+FinanceDataReader
+firebase-admin
+firebase-functions
+python-dotenv
