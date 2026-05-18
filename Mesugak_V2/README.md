@@ -1,5 +1,7 @@
 # Mesugak V2
 
+[![Mesugak V2 CI](https://github.com/baak-jun/MesuGak/actions/workflows/mesugak-v2-ci.yml/badge.svg)](https://github.com/baak-jun/MesuGak/actions/workflows/mesugak-v2-ci.yml)
+
 Mesugak V2 rebuilds the project around a strategy engine instead of a Bollinger-only scanner.
 
 Core signals:

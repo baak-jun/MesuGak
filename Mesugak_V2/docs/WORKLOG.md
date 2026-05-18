@@ -64,6 +64,8 @@ This document is the running handoff list for continuing V2 work without re-aski
 - Added scheduler environment validation helper.
 - Added optional Firestore emulator smoke path guarded by `FIRESTORE_EMULATOR_HOST`.
 - Split CI Python dependencies into `functions/requirements.ci.txt`.
+- Confirmed GitHub Actions CI success on run `26025876706`.
+- Added CI badge to root and V2 README files.
 - Added V2 release checklist.
 - Built V2 frontend strategy console:
   - signal list
@@ -94,14 +96,14 @@ This document is the running handoff list for continuing V2 work without re-aski
 ## Current Gaps
 
 - Scheduled paper flow is wired for Firebase Functions, but production runtime limits need to be validated on a real deploy with the target market size.
-- CI workflow is present, but it has not been observed on a remote GitHub run in this session.
+- CI workflow has been observed passing on GitHub.
 - Firebase Functions environment variables are documented and validated locally; production runtime limits still need real deploy observation.
 
 ## Next Work Queue
 
-1. Add README badge/status notes after the CI workflow is confirmed on GitHub.
-2. Add production runtime observations after the first scheduled run.
-3. Add emulator-backed CI job only if Firebase emulator startup is needed in CI.
+1. Add production runtime observations after the first scheduled run.
+2. Add emulator-backed CI job only if Firebase emulator startup is needed in CI.
+3. Add deployment result notes after the first Firebase deploy.
 
 ## Operating Rule
 
