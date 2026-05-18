@@ -63,6 +63,7 @@ This document is the running handoff list for continuing V2 work without re-aski
 - Added separate frontend workspace mode for execution history.
 - Added scheduler environment validation helper.
 - Added optional Firestore emulator smoke path guarded by `FIRESTORE_EMULATOR_HOST`.
+- Split CI Python dependencies into `functions/requirements.ci.txt`.
 - Added V2 release checklist.
 - Built V2 frontend strategy console:
   - signal list

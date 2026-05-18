@@ -104,6 +104,7 @@ python Mesugak_V2\functions\jobs\emulator_smoke_flow.py
 CI-style verification:
 
 ```powershell
+pip install -r Mesugak_V2\functions\requirements.ci.txt
 python -m unittest discover -s Mesugak_V2\functions\tests
 python -m py_compile Mesugak_V2\functions\main.py Mesugak_V2\functions\jobs\analyze_market.py Mesugak_V2\functions\jobs\rebalance.py Mesugak_V2\functions\jobs\apply_paper_orders.py Mesugak_V2\functions\jobs\run_paper_flow.py Mesugak_V2\functions\jobs\smoke_test_flow.py Mesugak_V2\functions\jobs\validate_scheduler_env.py Mesugak_V2\functions\jobs\emulator_smoke_flow.py
 Set-Location Mesugak_V2\frontend
