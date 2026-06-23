@@ -212,6 +212,60 @@ p {
   font-weight: 800;
 }
 
+.sort-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 1px 0;
+}
+
+.sort-heading span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.sort-heading strong {
+  font-size: 17px;
+  letter-spacing: -0.03em;
+}
+
+.sort-direction {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.sort-direction button {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-bg);
+  color: var(--muted);
+  padding: 6px 4px;
+.sort-heading span {
+  font-size: 0;
+}
+
+.sort-heading span::after {
+  content: "\C815 \B82C \AE30 \C900 ";
+  font-size: 11px;
+}
+
+.sort-direction button {
+  font-size: 0;
+}
+
+.sort-direction button::after {
+  font-size: 11px;
+}
+
+.sort-direction button:first-child::after {
+  content: "\C624 \B984 \CC28 \C21C ";
+}
+  font-size: 11px;
+  font-weight: 800;
+}
 .watch-filters input::placeholder {
   color: var(--muted);
 }

@@ -56,6 +56,17 @@ def _latest_number(row: pd.Series, key: str, default: float = 0.0) -> float:
     return default if value is None else value
 
 
+def _relative_pct(numerator: float, denominator: float) -> float:
+    """Return a comparable percentage gap while keeping missing baselines safe."""
+    if denominator == 0:
+        return 0.0
+    return round((numerator / denominator - 1.0) * 100.0, 4)
+
+
+    value = _clean_number(row.get(key))
+    return default if value is None else value
+
+
 def build_history(df: pd.DataFrame, limit: int = 260) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     recent = df.tail(limit).copy()
@@ -96,6 +107,18 @@ def analyze_stock(df: pd.DataFrame, identity: StockIdentity) -> dict[str, Any] |
     current_price = _latest_number(latest, "close")
     bandwidth = _latest_number(latest, "bb_bandwidth")
     percent_b = _latest_number(latest, "bb_percent_b")
+    previous = enriched.iloc[-2] if len(enriched) >= 2 else latest
+    ma20 = _latest_number(latest, "ma20")
+    ma60 = _latest_number(latest, "ma60")
+    cloud_top = max(_latest_number(latest, "senkou_a"), _latest_number(latest, "senkou_b"))
+    tenkan = _latest_number(latest, "tenkan")
+    kijun = _latest_number(latest, "kijun")
+    senkou_a = _latest_number(latest, "senkou_a")
+    senkou_b = _latest_number(latest, "senkou_b")
+    rsi = _latest_number(latest, "rsi")
+    previous_rsi = _latest_number(previous, "rsi")
+    bollinger_state = (score.indicator_states or {}).get("bollinger", {})
+    ma_state = (score.indicator_states or {}).get("maSupport", {})
 
     if score.confidence_label in {"STRONG_BUY", "BUY_CANDIDATE"} and risk.risk_state != "DEFENSIVE":
         action = "BUY_CANDIDATE"
@@ -128,6 +151,29 @@ def analyze_stock(df: pd.DataFrame, identity: StockIdentity) -> dict[str, Any] |
         "volume": _latest_number(latest, "volume"),
         "bandwidth": round(bandwidth, 4),
         "percentB": round(percent_b, 4),
+        "sortMetrics": {
+            "bollinger": {
+                "percentB": round(percent_b, 4),
+                "bandwidth": round(bandwidth, 4),
+                "bandwidthRank": bollinger_state.get("bandwidthRank"),
+            },
+            "maSupport": {
+                "priceToMa20Pct": _relative_pct(current_price, ma20),
+                "priceToMa60Pct": _relative_pct(current_price, ma60),
+                "aboveMa60Ratio": ma_state.get("aboveMa60Ratio"),
+                "ma20ChangePct": _relative_pct(ma20, _latest_number(previous, "ma20")),
+                "ma60ChangePct": _relative_pct(ma60, _latest_number(previous, "ma60")),
+            },
+            "ichimoku": {
+                "priceToCloudPct": _relative_pct(current_price, cloud_top),
+                "tenkanToKijunPct": _relative_pct(tenkan, kijun),
+                "cloudSpreadPct": _relative_pct(senkou_a - senkou_b, cloud_top),
+            },
+            "rsi": {
+                "rsi": round(rsi, 4),
+                "rsiChange": round(rsi - previous_rsi, 4),
+            },
+        },
         "lastDate": last_date,
         "history": history,
         "confidenceScore": score.confidence_score,
@@ -166,6 +212,8 @@ def to_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "lastDate",
         "confidenceScore",
         "confidenceLabel",
+        "componentScores",
+        "sortMetrics",
         "riskState",
         "riskFlags",
         "cashTargetPct",

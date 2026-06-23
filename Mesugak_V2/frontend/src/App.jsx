@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import {
@@ -55,6 +55,18 @@ const mockSignals = [
     cashTarget: 12,
     riskState: 'normal',
     updatedAt: '2026-05-17',
+    componentScores: {
+      bollinger: 80,
+      maSupport: 86,
+      ichimoku: 92,
+      rsi: 78,
+    },
+    sortMetrics: {
+      bollinger: { percentB: 0.82, bandwidth: 0.19, bandwidthRank: 0.72 },
+      maSupport: { priceToMa20Pct: 2.3, priceToMa60Pct: 7.8, aboveMa60Ratio: 0.88 },
+      ichimoku: { priceToCloudPct: 5.1, tenkanToKijunPct: 1.7, cloudSpreadPct: 2.5 },
+      rsi: { rsi: 61.4, rsiChange: 2.2 },
+    },
     components: [
       { label: '일목균형표', score: 92, max: 100 },
       { label: '이동평균선', score: 86, max: 100 },
@@ -63,7 +75,7 @@ const mockSignals = [
       { label: '감점', score: 0, max: 100 },
     ],
     risks: [{ label: '리스크 상태', state: 'clear', value: 'NORMAL' }],
-    raw: { history: mockHistory },
+    raw: { history: mockHistory, marcap: 460000000000000 },
   },
 ];
 
@@ -130,6 +142,111 @@ const componentWeights = {
   penalty: -1,
 };
 
+const sortGroups = [
+  {
+    label: '?? ??',
+    tone: 'market',
+    options: [
+      { key: 'confidence', label: '?? ??? ??', category: '?? ??' },
+      { key: 'marketCap', label: '???? (KR? ??)', category: '?? ??', krOnly: true },
+      { key: 'cash', label: '?? ?? ??', category: '?? ??' },
+      { key: 'market', label: '?? / ??', category: '?? ??', text: true },
+      { key: 'name', label: '???', category: '?? ??', text: true },
+    ],
+  },
+  {
+    label: '?? ??',
+    tone: 'score',
+    options: [
+      { key: 'score.bollinger', label: '????? ??', category: '?????', color: '#3b82f6' },
+      { key: 'score.maSupport', label: '????? ??', category: '?????', color: '#f59e0b' },
+      { key: 'score.ichimoku', label: '????? ??', category: '?????', color: '#8b5cf6' },
+      { key: 'score.rsi', label: 'RSI ??', category: 'RSI', color: '#ec4899' },
+    ],
+  },
+  {
+    label: '?? ?? ??',
+    tone: 'detail',
+    options: [
+      { key: 'detail.bollinger.percentB', label: '%B', category: '?????', color: '#3b82f6' },
+      { key: 'detail.bollinger.bandwidth', label: '???', category: '?????', color: '#3b82f6' },
+      { key: 'detail.bollinger.bandwidthRank', label: '??? ???', category: '?????', color: '#3b82f6' },
+      { key: 'detail.maSupport.priceToMa20Pct', label: 'MA20 ?? ???', category: '?????', color: '#f59e0b' },
+      { key: 'detail.maSupport.priceToMa60Pct', label: 'MA60 ?? ???', category: '?????', color: '#f59e0b' },
+      { key: 'detail.maSupport.aboveMa60Ratio', label: 'MA60 ?? ??', category: '?????', color: '#f59e0b' },
+      { key: 'detail.ichimoku.priceToCloudPct', label: '??? ?? ???', category: '?????', color: '#8b5cf6' },
+      { key: 'detail.ichimoku.tenkanToKijunPct', label: '???/??? ???', category: '?????', color: '#8b5cf6' },
+      { key: 'detail.ichimoku.cloudSpreadPct', label: '??? ?', category: '?????', color: '#8b5cf6' },
+      { key: 'detail.rsi.rsi', label: 'RSI ?', category: 'RSI', color: '#ec4899' },
+      { key: 'detail.rsi.rsiChange', label: 'RSI ???', category: 'RSI', color: '#ec4899' },
+    ],
+  },
+];
+
+const sortOptions = sortGroups.flatMap((group) => group.options);
+const sortOptionByKey = Object.fromEntries(sortOptions.map((option) => [option.key, option]));
+const sortGroupLabels = ['\uC2DC\uC7A5 \uC815\uBCF4', '\uC0C1\uC704 \uC810\uC218', '\uC810\uC218 \uC138\uBD80 \uC218\uCE58'];
+const sortText = {
+  confidence: { label: '\uC885\uD569 \uC2E0\uB8B0\uB3C4 \uC810\uC218', category: '\uC885\uD569 \uC810\uC218' },
+  marketCap: { label: '\uC2DC\uAC00\uCD1D\uC561 (KR\uB9CC \uC81C\uACF5)', category: '\uC2DC\uC7A5 \uC815\uBCF4' },
+  cash: { label: '\uAD8C\uC7A5 \uD604\uAE08 \uBE44\uC911', category: '\uC2DC\uC7A5 \uC815\uBCF4' },
+  market: { label: '\uC2DC\uC7A5 / \uCF54\uB4DC', category: '\uC2DC\uC7A5 \uC815\uBCF4' },
+  name: { label: '\uC885\uBAA9\uBA85', category: '\uC2DC\uC7A5 \uC815\uBCF4' },
+  'score.bollinger': { label: '\uBCFC\uB9B0\uC800\uBC34\uB4DC \uC810\uC218', category: '\uBCFC\uB9B0\uC800\uBC34\uB4DC' },
+  'score.maSupport': { label: '\uC774\uB3D9\uD3C9\uADE0\uC120 \uC810\uC218', category: '\uC774\uB3D9\uD3C9\uADE0\uC120' },
+  'score.ichimoku': { label: '\uC77C\uBAA9\uADE0\uD615\uD45C \uC810\uC218', category: '\uC77C\uBAA9\uADE0\uD615\uD45C' },
+  'score.rsi': { label: 'RSI \uC810\uC218', category: 'RSI' },
+  'detail.bollinger.percentB': { label: '%B', category: '\uBCFC\uB9B0\uC800\uBC34\uB4DC' },
+  'detail.bollinger.bandwidth': { label: '\uBC34\uB4DC\uD3ED', category: '\uBCFC\uB9B0\uC800\uBC34\uB4DC' },
+  'detail.bollinger.bandwidthRank': { label: '\uBC34\uB4DC\uD3ED \uBC31\uBD84\uC704', category: '\uBCFC\uB9B0\uC800\uBC34\uB4DC' },
+  'detail.maSupport.priceToMa20Pct': { label: 'MA20 \uB300\uBE44 \uAD34\uB9AC\uC728', category: '\uC774\uB3D9\uD3C9\uADE0\uC120' },
+  'detail.maSupport.priceToMa60Pct': { label: 'MA60 \uB300\uBE44 \uAD34\uB9AC\uC728', category: '\uC774\uB3D9\uD3C9\uADE0\uC120' },
+  'detail.maSupport.aboveMa60Ratio': { label: 'MA60 \uC0C1\uD68C \uBE44\uC728', category: '\uC774\uB3D9\uD3C9\uADE0\uC120' },
+  'detail.ichimoku.priceToCloudPct': { label: '\uAD6C\uB984\uB300 \uB300\uBE44 \uAD34\uB9AC\uC728', category: '\uC77C\uBAA9\uADE0\uD615\uD45C' },
+  'detail.ichimoku.tenkanToKijunPct': { label: '\uC804\uD658\uC120 / \uAE30\uC900\uC120 \uAD34\uB9AC\uC728', category: '\uC77C\uBAA9\uADE0\uD615\uD45C' },
+  'detail.ichimoku.cloudSpreadPct': { label: '\uAD6C\uB984\uB300 \uD3ED', category: '\uC77C\uBAA9\uADE0\uD615\uD45C' },
+  'detail.rsi.rsi': { label: 'RSI \uAC12', category: 'RSI' },
+  'detail.rsi.rsiChange': { label: 'RSI \uBCC0\uD654\uB7C9', category: 'RSI' },
+
+};
+sortGroups.forEach((group, index) => { group.label = sortGroupLabels[index]; });
+sortOptions.forEach((option) => Object.assign(option, sortText[option.key] || {}));
+
+function numberAt(value, path) {
+const sortUi = {
+  heading: '\uC815\uB82C \uAE30\uC900',
+  ascending: '\uC624\uB984\uCC28\uC21C',
+  descending: '\uB0B4\uB9BC\uCC28\uC21C',
+  separator: ' \u00B7 ',
+};
+  const number = path.split('.').reduce((current, key) => current?.[key], value);
+  return Number.isFinite(Number(number)) ? Number(number) : null;
+}
+
+function componentScore(signal, key) {
+  const direct = numberAt(signal.componentScores, key);
+  if (direct !== null) return direct;
+  return Number(signal.components?.find((component) => component.key === key)?.score) || null;
+}
+
+function sortValue(signal, mode) {
+  if (mode === 'confidence') return Number(signal.confidence);
+  if (mode === 'cash') return Number(signal.cashTarget);
+  if (mode === 'marketCap') {
+    const marcap = numberAt(signal.raw, 'marcap');
+    return signal.market === 'KR' && marcap && marcap > 0 ? marcap : null;
+  }
+  if (mode.startsWith('score.')) return componentScore(signal, mode.slice('score.'.length));
+  if (mode.startsWith('detail.')) {
+    const path = mode.slice('detail.'.length);
+    const metric = numberAt(signal.sortMetrics, path);
+    if (metric !== null) return metric;
+    if (path === 'bollinger.percentB') return numberAt(signal.raw, 'percentB');
+    if (path === 'bollinger.bandwidth') return numberAt(signal.raw, 'bandwidth');
+    return numberAt(signal.indicatorStates, path);
+  }
+  return null;
+}
 function formatNumber(value, digits = 0) {
   const number = Number(value);
   if (!Number.isFinite(number)) return '-';
@@ -272,6 +389,8 @@ function mapStockPayload(payload) {
     riskState: riskStateFromPayload(payload),
     updatedAt: payload.lastDate || '-',
     components: mapComponents(payload),
+    componentScores: payload.componentScores || {},
+    sortMetrics: payload.sortMetrics || {},
     risks: mapRisks(payload),
     indicatorStates: payload.indicatorStates || payload.signal?.indicatorStates || {},
     raw: { ...payload, history, hasFullHistory: history.length > 0 },
@@ -1271,10 +1390,13 @@ export default function App() {
   const [marketFilter, setMarketFilter] = useState('ALL');
   const [labelFilter, setLabelFilter] = useState('ALL');
   const [sortMode, setSortMode] = useState('confidence');
+  const [sortDirection, setSortDirection] = useState('desc');
   const [workspaceView, setWorkspaceView] = useState('console');
   const [user, setUser] = useState(null);
   const [settingsReady, setSettingsReady] = useState(false);
   const [settingsStatus, setSettingsStatus] = useState('');
+  const activeSort = sortOptionByKey[sortMode] || sortOptionByKey.confidence;
+
 
   const selected = useMemo(
     () => signals.find((signal) => signal.id === selectedId) ?? signals[0],
@@ -1302,12 +1424,22 @@ export default function App() {
     });
 
     return [...rows].sort((a, b) => {
-      if (sortMode === 'name') return a.name.localeCompare(b.name);
-      if (sortMode === 'market') return `${a.market}:${a.code}`.localeCompare(`${b.market}:${b.code}`);
-      if (sortMode === 'cash') return Number(b.cashTarget || 0) - Number(a.cashTarget || 0);
-      return Number(b.confidence || 0) - Number(a.confidence || 0);
+      if (sortMode === 'name') {
+        return sortDirection === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
+      }
+      if (sortMode === 'market') {
+        const compared = `${a.market}:${a.code}`.localeCompare(`${b.market}:${b.code}`);
+        return sortDirection === 'asc' ? compared : -compared;
+      }
+      const aValue = sortValue(a, sortMode);
+      const bValue = sortValue(b, sortMode);
+      if (aValue === null && bValue === null) return a.name.localeCompare(b.name);
+      if (aValue === null) return 1;
+      if (bValue === null) return -1;
+      const compared = aValue - bValue;
+      return sortDirection === 'asc' ? compared : -compared;
     });
-  }, [signals, searchText, marketFilter, labelFilter, sortMode]);
+  }, [signals, searchText, marketFilter, labelFilter, sortMode, sortDirection]);
 
   const refreshSignals = async () => {
     setLoading(true);
@@ -1484,6 +1616,7 @@ export default function App() {
           setMarketFilter(data.marketFilter || 'ALL');
           setLabelFilter(data.labelFilter || 'ALL');
           setSortMode(data.sortMode || 'confidence');
+          setSortDirection(data.sortDirection || 'desc');
         }
         setSettingsStatus('설정 불러옴');
       } catch (error) {
@@ -1509,6 +1642,7 @@ export default function App() {
           marketFilter,
           labelFilter,
           sortMode,
+          sortDirection,
           updatedAt: serverTimestamp(),
         }, { merge: true });
         setSettingsStatus('설정 저장됨');
@@ -1518,7 +1652,7 @@ export default function App() {
     }, 500);
 
     return () => window.clearTimeout(timer);
-  }, [user?.uid, settingsReady, range, theme, layers, indicatorStyles, indicatorVisibility, marketFilter, labelFilter, sortMode]);
+  }, [user?.uid, settingsReady, range, theme, layers, indicatorStyles, indicatorVisibility, marketFilter, labelFilter, sortMode, sortDirection]);
 
   useEffect(() => {
     if (!selected || selected.raw?.hasFullHistory) return;
@@ -1573,7 +1707,24 @@ export default function App() {
               <option value="AVOID">회피</option>
             </select>
           </div>
-          <select value={sortMode} onChange={(event) => setSortMode(event.target.value)} aria-label="Sort stocks">
+          <div className="sort-heading">
+            <span>{sortUi.heading}</span>
+            <strong style={{ color: activeSort.color }}>{activeSort.category}</strong>
+          </div>
+          <div className="sort-direction" aria-label="Sort direction">
+            <button type="button" className={sortDirection === 'asc' ? 'active' : ''} onClick={() => setSortDirection('asc')}>{sortUi.descending}</button>
+            <button type="button" className={sortDirection === 'desc' ? 'active' : ''} onClick={() => setSortDirection('desc')}>{sortUi.ascending}</button>
+          </div>
+          <select className="sort-select" value={sortMode} onChange={(event) => setSortMode(event.target.value)} aria-label="Sort stocks">
+            {sortGroups.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.options.map((option) => (
+                  <option key={option.key} value={option.key} style={{ color: option.color }}>
+                    {option.category}{sortUi.separator}{option.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
             <option value="confidence">점수순</option>
             <option value="cash">현금 비중순</option>
             <option value="market">시장/코드순</option>

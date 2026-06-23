@@ -235,6 +235,10 @@ class ScoringRiskAnalysisTests(unittest.TestCase):
         self.assertEqual(summary["id"], payload["id"])
         self.assertIn("confidenceScore", summary)
         self.assertIn("indicatorStates", summary)
+        self.assertIn("componentScores", summary)
+        self.assertIn("sortMetrics", summary)
+        self.assertIn("bollinger", summary["sortMetrics"])
+        self.assertIn("percentB", summary["sortMetrics"]["bollinger"])
 
     def test_analyze_stock_rejects_short_history(self) -> None:
         payload = analyze_stock(
