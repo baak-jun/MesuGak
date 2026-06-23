@@ -23,10 +23,20 @@ The current server cron can continue invoking its existing `run_kr_close.sh` and
 
 ## V2 migration
 
-`run_v2_kr_close.sh` is the V2 entry point. It runs
+`run_v2_kr_close.sh` and `run_v2_us_close.sh` are the V2 entry points. They run
 `functions/jobs/analyze_market.py`, which writes `meta_v2_*` documents used by
-the V2 frontend. Deploy the whole `Mesugak_V2/functions/` directory to the path
-set by `MESUGAK_V2_ROOT`, create `.env.server` from `.env.server.example`, and
-replace the KR cron entry only after a small manual run succeeds.
+the V2 frontend. Deploy the whole `Mesugak_V2/functions/` directory and both
+runner scripts to the path set by `MESUGAK_V2_ROOT`, then create `.env.server`
+from `.env.server.example`.
+
+For the managed school-server layout, use:
+
+```cron
+10 16 * * 1-5 /home/2023112374/mesugak/v2/run_v2_kr_close.sh
+20 5,6 * * * /home/2023112374/mesugak/v2/run_v2_us_close.sh
+```
+
+The US wrapper checks the New York trading-day close and records a date stamp,
+so the two calls handle daylight saving time without duplicate analysis.
 
 Never commit the actual `.env.server` file or service-account JSON.

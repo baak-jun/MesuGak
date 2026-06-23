@@ -212,13 +212,14 @@ const sortText = {
 sortGroups.forEach((group, index) => { group.label = sortGroupLabels[index]; });
 sortOptions.forEach((option) => Object.assign(option, sortText[option.key] || {}));
 
-function numberAt(value, path) {
 const sortUi = {
   heading: '\uC815\uB82C \uAE30\uC900',
   ascending: '\uC624\uB984\uCC28\uC21C',
   descending: '\uB0B4\uB9BC\uCC28\uC21C',
   separator: ' \u00B7 ',
 };
+
+function numberAt(value, path) {
   const number = path.split('.').reduce((current, key) => current?.[key], value);
   return Number.isFinite(Number(number)) ? Number(number) : null;
 }

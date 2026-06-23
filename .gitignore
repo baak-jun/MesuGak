@@ -17,3 +17,4 @@ serviceAccountKey.json
 __pycache__/
 *.py[cod]
 .pytest_cache/
+Mesugak_V2/functions/venv/
