@@ -130,15 +130,17 @@ const componentMeta = {
   bollinger: { label: '볼린저밴드', max: 100 },
   rsi: { label: 'RSI', max: 100 },
   valuation: { label: '가치판단', max: 100 },
+  volume: { label: '거래량 확인', max: 100 },
   penalty: { label: '감점', max: 100 },
 };
 
 const componentWeights = {
-  bollinger: 0.30,
+  bollinger: 0.25,
   maSupport: 0.20,
-  ichimoku: 0.15,
+  ichimoku: 0.20,
   rsi: 0.10,
-  valuation: 0.25,
+  valuation: 0.15,
+  volume: 0.10,
   penalty: -1,
 };
 
@@ -323,7 +325,7 @@ function stateLabel(value) {
 
 function mapComponents(payload) {
   const scores = payload.componentScores || {};
-  const order = ['bollinger', 'maSupport', 'ichimoku', 'rsi', 'valuation', 'penalty'];
+  const order = ['bollinger', 'maSupport', 'ichimoku', 'rsi', 'volume', 'valuation', 'penalty'];
   return Object.entries(scores)
     .map(([key, value]) => ({
       key,
@@ -668,6 +670,7 @@ async function loadTradeLogsFromFirestore() {
     pnlPct: log.pnlPct,
     pnl: log.pnl,
     source: log.source || 'legacy',
+    brokerOrderNo: log.brokerOrderNo || '',
   }));
 }
 
@@ -1331,6 +1334,7 @@ function TradeLogPanel({ logs }) {
               <th>Amount</th>
               <th>PnL</th>
               <th>Reason</th>
+              <th>Broker order</th>
             </tr>
           </thead>
           <tbody>
@@ -1357,6 +1361,7 @@ function TradeLogPanel({ logs }) {
                   {log.pnlPct !== undefined ? ` (${formatNumber(Number(log.pnlPct || 0), 2)}%)` : ''}
                 </td>
                 <td>{log.reason}</td>
+                <td>{log.brokerOrderNo || '-'}</td>
               </tr>
             ))}
           </tbody>

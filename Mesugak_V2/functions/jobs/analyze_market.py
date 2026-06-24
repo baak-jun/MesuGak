@@ -14,7 +14,7 @@ if str(FUNCTIONS_DIR) not in sys.path:
 
 from strategy_engine.analysis import StockIdentity, analyze_stock, to_summary
 from strategy_engine.checkpoints import LocalCheckpointManager, MemoryCheckpointManager, resolve_checkpoint_path
-from strategy_engine.market_data import load_market_universe, load_ohlcv_with_fdr, targets_from_codes
+from strategy_engine.market_data import load_kr_fundamentals_with_fdr, load_market_universe, load_ohlcv_with_fdr, targets_from_codes
 from strategy_engine.repositories import FirestoreStrategyRepository, init_firestore
 
 
@@ -141,6 +141,12 @@ def run(args: argparse.Namespace) -> dict:
             remaining_count = len(remaining_targets) - offset - 1
             try:
                 df = load_ohlcv_with_fdr(target.code)
+                fundamentals = {}
+                if market == "KR":
+                    try:
+                        fundamentals = load_kr_fundamentals_with_fdr(target.code)
+                    except Exception as exc:
+                        print(f"[fundamentals] {target.code} unavailable: {type(exc).__name__}: {exc}", flush=True)
                 payload = analyze_stock(
                     df,
                     StockIdentity(
@@ -149,6 +155,7 @@ def run(args: argparse.Namespace) -> dict:
                         name=target.name,
                         marcap=target.marcap,
                     ),
+                    fundamentals=fundamentals,
                 )
                 if not payload:
                     failure = {"code": target.code, "reason": "insufficient_data"}

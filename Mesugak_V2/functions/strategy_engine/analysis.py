@@ -24,10 +24,14 @@ HISTORY_COLUMNS = {
     "bb_percent_b": "percentB",
     "rsi": "rsi",
     "rsi_signal": "rsiSignal",
+    "volume_ma20": "volumeMa20",
+    "relative_volume": "relativeVolume",
     "tenkan": "tenkan",
     "kijun": "kijun",
     "senkou_a": "senkouA",
     "senkou_b": "senkouB",
+    "senkou_a_leading": "senkouALeading",
+    "senkou_b_leading": "senkouBLeading",
     "chikou": "chikou",
 }
 
@@ -93,7 +97,11 @@ def build_history(df: pd.DataFrame, limit: int = 260) -> list[dict[str, Any]]:
     return rows
 
 
-def analyze_stock(df: pd.DataFrame, identity: StockIdentity) -> dict[str, Any] | None:
+def analyze_stock(
+    df: pd.DataFrame,
+    identity: StockIdentity,
+    fundamentals: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
     if df is None or df.empty or len(df) < 120:
         return None
 
@@ -101,7 +109,7 @@ def analyze_stock(df: pd.DataFrame, identity: StockIdentity) -> dict[str, Any] |
     enriched = enriched.replace([float("inf"), float("-inf")], pd.NA)
     latest = enriched.iloc[-1]
 
-    score = score_latest(enriched)
+    score = score_latest(enriched, fundamentals=fundamentals)
     risk = evaluate_risk(enriched)
     history = build_history(enriched)
     current_price = _latest_number(latest, "close")
@@ -119,6 +127,7 @@ def analyze_stock(df: pd.DataFrame, identity: StockIdentity) -> dict[str, Any] |
     previous_rsi = _latest_number(previous, "rsi")
     bollinger_state = (score.indicator_states or {}).get("bollinger", {})
     ma_state = (score.indicator_states or {}).get("maSupport", {})
+    volume_state = (score.indicator_states or {}).get("volume", {})
 
     if score.confidence_label in {"STRONG_BUY", "BUY_CANDIDATE"} and risk.risk_state != "DEFENSIVE":
         action = "BUY_CANDIDATE"
@@ -163,6 +172,7 @@ def analyze_stock(df: pd.DataFrame, identity: StockIdentity) -> dict[str, Any] |
                 "aboveMa60Ratio": ma_state.get("aboveMa60Ratio"),
                 "ma20ChangePct": _relative_pct(ma20, _latest_number(previous, "ma20")),
                 "ma60ChangePct": _relative_pct(ma60, _latest_number(previous, "ma60")),
+                "lowerBandAboveMa60": ma_state.get("lowerBandAboveMa60"),
             },
             "ichimoku": {
                 "priceToCloudPct": _relative_pct(current_price, cloud_top),
@@ -173,6 +183,7 @@ def analyze_stock(df: pd.DataFrame, identity: StockIdentity) -> dict[str, Any] |
                 "rsi": round(rsi, 4),
                 "rsiChange": round(rsi - previous_rsi, 4),
             },
+            "volume": {"relativeVolume": volume_state.get("relativeVolume", _latest_number(latest, "relative_volume"))},
         },
         "lastDate": last_date,
         "history": history,
@@ -181,6 +192,7 @@ def analyze_stock(df: pd.DataFrame, identity: StockIdentity) -> dict[str, Any] |
         "componentScores": score.component_scores,
         "confidenceReasons": score.reasons,
         "indicatorStates": score.indicator_states or {},
+        "fundamentals": fundamentals or {},
         "riskState": risk.risk_state,
         "riskFlags": risk.risk_flags,
         "cashTargetPct": risk.cash_target_pct,

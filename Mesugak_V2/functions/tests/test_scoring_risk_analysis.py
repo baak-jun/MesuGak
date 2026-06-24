@@ -12,7 +12,7 @@ if str(FUNCTIONS_DIR) not in sys.path:
 
 from strategy_engine.analysis import StockIdentity, analyze_stock, to_summary  # noqa: E402
 from strategy_engine.risk import evaluate_risk  # noqa: E402
-from strategy_engine.scoring import classify_bollinger_state, classify_ma_support_state, score_latest  # noqa: E402
+from strategy_engine.scoring import classify_bollinger_state, classify_ma_support_state, score_latest, score_valuation  # noqa: E402
 
 
 def scoring_rows(overrides: dict | None = None) -> pd.DataFrame:
@@ -120,11 +120,26 @@ def bollinger_state_rows(state: str) -> pd.DataFrame:
 
 class ScoringRiskAnalysisTests(unittest.TestCase):
     def test_score_latest_strong_candidate_and_reasons(self) -> None:
-        result = score_latest(scoring_rows())
+        df = bollinger_state_rows("release")
+        previous_index = df.index[-2]
+        latest_index = df.index[-1]
+        df.loc[previous_index, "bb_lower"] = df.loc[previous_index, "ma60"] - 1
+        df.loc[latest_index, "bb_lower"] = df.loc[latest_index, "ma60"] + 1
+        df.loc[previous_index, "rsi"] = 49
+        df.loc[latest_index, "rsi"] = 55
+        df["rsi_signal"] = 48
+        df["senkou_a_leading"] = df["senkou_a"]
+        df["senkou_b_leading"] = df["senkou_b"]
+        df["volume"] = 100
+        df["volume_ma20"] = 100
+        df.loc[latest_index, "volume"] = 200
+        df.loc[latest_index, "relative_volume"] = 2
+        df.loc[latest_index, "close"] = df.loc[previous_index, "high"] + 1
+        result = score_latest(df)
 
         self.assertEqual(result.confidence_label, "STRONG_BUY")
-        self.assertGreaterEqual(result.confidence_score, 78)
-        self.assertIn("price_above_cloud", result.reasons)
+        self.assertGreaterEqual(result.confidence_score, 68)
+        self.assertIn("ichimoku_price_above_cloud", result.reasons)
         self.assertIn("bollinger_state_squeeze_release_up", result.reasons)
         self.assertIn("penalty", result.component_scores)
 
@@ -135,19 +150,19 @@ class ScoringRiskAnalysisTests(unittest.TestCase):
         self.assertGreaterEqual(state["score"], 84)
         self.assertIn("recent_squeeze", state["reasons"])
 
-    def test_bollinger_state_detects_expansion_curl_neutral(self) -> None:
+    def test_bollinger_state_scores_a_25_day_squeeze_without_trend_bonus(self) -> None:
         state = classify_bollinger_state(bollinger_state_rows("curl"))
 
-        self.assertEqual(state["state"], "EXPANSION_CURL_NEUTRAL")
-        self.assertLessEqual(state["score"], 55)
+        self.assertEqual(state["state"], "SQUEEZE")
+        self.assertEqual(state["score"], 35)
 
-    def test_score_latest_does_not_buy_expansion_curl(self) -> None:
+    def test_score_latest_does_not_buy_squeeze_without_other_confirmations(self) -> None:
         result = score_latest(bollinger_state_rows("curl"))
 
-        self.assertEqual(result.indicator_states["bollinger"]["state"], "EXPANSION_CURL_NEUTRAL")
+        self.assertEqual(result.indicator_states["bollinger"]["state"], "SQUEEZE")
         self.assertNotIn(result.confidence_label, {"STRONG_BUY", "BUY_CANDIDATE"})
 
-    def test_ma_support_rewards_sustained_above_ma60(self) -> None:
+    def test_ma_support_rewards_lower_band_above_ma60(self) -> None:
         rows = []
         for idx in range(70):
             close = 100 + idx * 0.4
@@ -156,28 +171,36 @@ class ScoringRiskAnalysisTests(unittest.TestCase):
                     "open": close - 0.2,
                     "low": close - 0.1,
                     "close": close,
-                    "ma20": close - 5.0,
                     "ma60": close - 8.0 + idx * 0.02,
+                    "bb_lower": close - 6.0,
                 }
             )
 
         state = classify_ma_support_state(pd.DataFrame(rows))
 
-        self.assertEqual(state["state"], "SUSTAINED_ABOVE_MA60")
+        self.assertEqual(state["state"], "LOWER_BAND_ABOVE_MA60")
         self.assertGreaterEqual(state["score"], 70)
 
-    def test_ma_support_blocks_breakdown_through_ma60(self) -> None:
+    def test_ma_support_penalizes_lower_band_falling_below_ma60(self) -> None:
         df = pd.DataFrame(
             [
-                {"open": 103, "low": 101, "close": 103, "ma20": 102, "ma60": 100},
-                {"open": 101, "low": 98, "close": 99, "ma20": 102, "ma60": 100},
+                {"ma60": 100, "bb_lower": 101},
+                {"ma60": 100, "bb_lower": 99},
             ]
         )
 
         state = classify_ma_support_state(df)
 
-        self.assertEqual(state["state"], "MA60_BREAKDOWN")
-        self.assertEqual(state["score"], 0)
+        self.assertEqual(state["state"], "LOWER_BAND_CROSS_BELOW_MA60")
+        self.assertLess(state["score"], 0)
+
+    def test_valuation_scores_real_fundamentals_and_penalizes_weak_finances(self) -> None:
+        strong = score_valuation({"per": 9, "pbr": 1.2, "roe": 18, "debtRatio": 80, "operatingProfitGrowth": 12})
+        weak = score_valuation({"per": -5, "pbr": 6, "roe": -4, "debtRatio": 240, "operatingProfitGrowth": -15})
+
+        self.assertEqual(strong["state"], "VALUED")
+        self.assertGreater(strong["score"], 0)
+        self.assertLess(weak["score"], 0)
 
     def test_strong_buy_requires_high_quality_bollinger_setup(self) -> None:
         result = score_latest(scoring_rows({"bb_percent_b": 0.62, "close": 106.0, "bb_upper": 112.0}))
@@ -188,7 +211,6 @@ class ScoringRiskAnalysisTests(unittest.TestCase):
         result = score_latest(scoring_rows({"close": 88.0, "bb_lower": 92.0, "rsi": 78.0}))
 
         self.assertIn("penalty_below_lower_band", result.reasons)
-        self.assertIn("penalty_rsi_overheated", result.reasons)
         self.assertLess(result.confidence_score, 62)
 
     def test_score_latest_tolerates_missing_indicator_values(self) -> None:

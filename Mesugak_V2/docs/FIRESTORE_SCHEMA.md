@@ -23,6 +23,7 @@ Detailed stock analysis document.
 - `stopLoss`
 - `cashTargetPct`
 - `confidenceReasons`
+- `fundamentals`: latest reported fundamental inputs and source metadata, when available
 - `history`
 - `updatedAt`
 

@@ -68,6 +68,13 @@ def add_rsi(df: pd.DataFrame, period: int = 14, signal_period: int = 9) -> pd.Da
     return out
 
 
+def add_volume_indicators(df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
+    out = _validated_numeric_copy(df, ("volume",))
+    out["volume_ma20"] = out["volume"].rolling(window=window, min_periods=window).mean()
+    out["relative_volume"] = _safe_divide(out["volume"], out["volume_ma20"])
+    return out
+
+
 def add_ichimoku(df: pd.DataFrame) -> pd.DataFrame:
     out = _validated_numeric_copy(df, ("high", "low", "close"))
     high_9 = out["high"].rolling(window=9, min_periods=9).max()
@@ -79,8 +86,10 @@ def add_ichimoku(df: pd.DataFrame) -> pd.DataFrame:
 
     out["tenkan"] = (high_9 + low_9) / 2
     out["kijun"] = (high_26 + low_26) / 2
-    out["senkou_a"] = ((out["tenkan"] + out["kijun"]) / 2).shift(26)
-    out["senkou_b"] = ((high_52 + low_52) / 2).shift(26)
+    out["senkou_a_leading"] = (out["tenkan"] + out["kijun"]) / 2
+    out["senkou_b_leading"] = (high_52 + low_52) / 2
+    out["senkou_a"] = out["senkou_a_leading"].shift(26)
+    out["senkou_b"] = out["senkou_b_leading"].shift(26)
     out["chikou"] = out["close"].shift(-26)
     return out
 
@@ -89,5 +98,6 @@ def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     out = add_moving_averages(df)
     out = add_bollinger_bands(out)
     out = add_rsi(out)
+    out = add_volume_indicators(out)
     out = add_ichimoku(out)
     return out

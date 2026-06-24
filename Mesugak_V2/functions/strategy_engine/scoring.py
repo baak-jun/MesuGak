@@ -8,14 +8,13 @@ from typing import Any
 import pandas as pd
 
 SCORING_WEIGHTS = {
-    "bollinger": 0.30,
+    "bollinger": 0.25,
     "maSupport": 0.20,
-    "ichimoku": 0.15,
+    "ichimoku": 0.20,
     "rsi": 0.10,
-    "valuation": 0.25,
+    "valuation": 0.15,
+    "volume": 0.10,
 }
-
-NEUTRAL_VALUATION_SCORE = 50.0
 
 
 @dataclass(frozen=True)
@@ -44,7 +43,7 @@ def _series_num(df: pd.DataFrame, key: str) -> pd.Series:
     return pd.to_numeric(df[key], errors="coerce").dropna()
 
 
-def classify_bollinger_state(df: pd.DataFrame, lookback: int = 125) -> dict[str, Any]:
+def classify_bollinger_state(df: pd.DataFrame, lookback: int = 25) -> dict[str, Any]:
     if df.empty:
         return {"state": "NO_DATA", "score": 0.0, "reasons": ["no_data"]}
 
@@ -86,44 +85,31 @@ def classify_bollinger_state(df: pd.DataFrame, lookback: int = 125) -> dict[str,
 
     reasons: list[str] = []
     state = "NEUTRAL"
-    score = 40.0
+    score = 0.0
 
     if downside_breakdown and bandwidth > prev_bandwidth:
         state = "DOWNSIDE_EXPANSION"
-        score = 5.0
+        score = -45.0
         reasons.extend(["below_lower_band", "downside_band_expansion"])
     elif was_recent_upper_breakout and close < upper and percent_b < 0.75:
         state = "FAILED_RELEASE"
-        score = 25.0
+        score = -25.0
         reasons.extend(["failed_upper_band_release", "back_inside_band"])
-    elif recent_squeeze and expanding and (upper_breakout or percent_b >= 1.0) and close >= mid:
+    elif recent_squeeze and expanding and upper_breakout and close >= mid:
         state = "SQUEEZE_RELEASE_UP"
-        score = 92.0 if upper_breakout else 84.0
+        score = 90.0
         reasons.extend(["recent_squeeze", "bandwidth_expanding", "upper_band_release"])
     elif is_squeezed:
         state = "SQUEEZE"
-        score = 52.0
+        score = 35.0
         reasons.extend(["bandwidth_low_percentile", "volatility_compression"])
     elif bandwidth >= high_threshold and (bandwidth <= prev_bandwidth or upper_slope <= 0 or percent_b < 0.70):
         state = "EXPANSION_CURL_NEUTRAL"
-        score = 48.0
-        reasons.extend(["expanded_band_curling", "neutral_after_expansion"])
-    elif percent_b >= 0.80 and upper_slope > 0 and mid_slope >= 0 and close >= mid:
-        state = "BAND_RIDE_UP"
-        score = 76.0
-        reasons.extend(["upper_band_ride", "middle_band_rising"])
-    elif 0.50 <= percent_b < 0.80 and mid_slope >= 0:
-        state = "HEALTHY_MID_UP"
-        score = 64.0
-        reasons.extend(["above_middle_band", "middle_band_rising"])
-
-    if lower_slope > 0 and close >= mid and state in {"SQUEEZE_RELEASE_UP", "BAND_RIDE_UP", "HEALTHY_MID_UP"}:
-        score += 3.0
-        reasons.append("lower_band_support_rising")
+        reasons.extend(["expanded_band_curling", "no_bollinger_signal"])
 
     return {
         "state": state,
-        "score": round(_clamp(score), 2),
+        "score": round(_clamp(score, -100.0, 100.0), 2),
         "reasons": reasons,
         "bandwidth": round(bandwidth, 6),
         "bandwidthRank": round(bandwidth_rank, 4),
@@ -140,98 +126,186 @@ def classify_ma_support_state(df: pd.DataFrame, lookback: int = 60) -> dict[str,
 
     last = df.iloc[-1].to_dict()
     prev = df.iloc[-2].to_dict() if len(df) >= 2 else last
-    close = _num(last, "close")
-    prev_close = _num(prev, "close")
-    low = _num(last, "low", close)
-    open_price = _num(last, "open", close)
-    ma20 = _num(last, "ma20")
+    bb_lower = _num(last, "bb_lower")
+    prev_bb_lower = _num(prev, "bb_lower")
     ma60 = _num(last, "ma60")
     prev_ma20 = _num(prev, "ma20")
     prev_ma60 = _num(prev, "ma60")
 
-    if ma20 <= 0 or ma60 <= 0:
+    if bb_lower <= 0 or ma60 <= 0:
         return {"state": "NO_DATA", "score": 0.0, "reasons": ["ma_no_data"]}
 
-    ma20_rising = ma20 > prev_ma20
     ma60_rising = ma60 > prev_ma60
-    broke_down_20 = prev_close >= prev_ma20 and close < ma20
-    broke_down_60 = prev_close >= prev_ma60 and close < ma60
-    broke_up_20 = prev_close < prev_ma20 and close >= ma20 and ma20_rising
-    broke_up_60 = prev_close < prev_ma60 and close >= ma60 and ma60_rising
-    bounce_20 = low <= ma20 * 1.015 and close > ma20 and close >= open_price and ma20_rising
-    bounce_60 = low <= ma60 * 1.02 and close > ma60 and close >= open_price and ma60_rising
-
-    ma60_series = _series_num(df.tail(lookback), "ma60")
-    close_series = _series_num(df.tail(lookback), "close")
-    aligned = pd.concat([close_series, ma60_series], axis=1, join="inner").dropna()
-    above_ma60_ratio = float((aligned.iloc[:, 0] >= aligned.iloc[:, 1]).mean()) if not aligned.empty else 0.0
+    lower_above_ma60 = bb_lower > ma60
+    crossed_above_ma60 = prev_bb_lower <= prev_ma60 and lower_above_ma60
+    crossed_below_ma60 = prev_bb_lower >= prev_ma60 and bb_lower < ma60
 
     reasons: list[str] = []
     state = "NEUTRAL"
-    score = 35.0
+    score = 0.0
 
-    if broke_down_60:
-        state = "MA60_BREAKDOWN"
-        score = 0.0
-        reasons.append("broke_below_ma60")
-    elif broke_down_20:
-        state = "MA20_BREAKDOWN"
-        score = 12.0 if close >= ma60 else 0.0
-        reasons.append("broke_below_ma20")
-    elif broke_up_60:
-        state = "MA60_BREAKOUT"
-        score = 88.0
-        reasons.append("reclaimed_ma60")
-    elif bounce_60:
-        state = "MA60_SUPPORT_BOUNCE"
-        score = 84.0
-        reasons.append("bounced_from_ma60_support")
-    elif broke_up_20:
-        state = "MA20_BREAKOUT"
-        score = 76.0
-        reasons.append("reclaimed_ma20")
-    elif bounce_20 and close >= ma60:
-        state = "MA20_SUPPORT_BOUNCE"
-        score = 72.0
-        reasons.append("bounced_from_ma20_support")
-    elif above_ma60_ratio >= 0.80 and close >= ma60 and ma60_rising:
-        state = "SUSTAINED_ABOVE_MA60"
+    if crossed_above_ma60:
+        state = "LOWER_BAND_CROSS_ABOVE_MA60"
+        score = 90.0
+        reasons.append("bollinger_lower_crossed_above_ma60")
+    elif lower_above_ma60:
+        state = "LOWER_BAND_ABOVE_MA60"
         score = 70.0
-        reasons.append("sustained_above_ma60_quality")
-    elif close >= ma20 and close >= ma60 and ma20_rising:
-        state = "ABOVE_RISING_SUPPORT"
-        score = 62.0
-        reasons.append("above_ma20_ma60")
-
-    if ma20 > ma60 and state not in {"MA60_BREAKDOWN", "MA20_BREAKDOWN"}:
-        score += 6.0
-        reasons.append("ma20_above_ma60")
+        reasons.append("bollinger_lower_above_ma60")
+    elif crossed_below_ma60:
+        state = "LOWER_BAND_CROSS_BELOW_MA60"
+        score = -35.0
+        reasons.append("bollinger_lower_crossed_below_ma60")
 
     return {
         "state": state,
-        "score": round(_clamp(score), 2),
+        "score": round(_clamp(score, -100.0, 100.0), 2),
         "reasons": reasons,
-        "aboveMa60Ratio": round(above_ma60_ratio, 4),
-        "ma20Rising": ma20_rising,
+        "lowerBandAboveMa60": lower_above_ma60,
         "ma60Rising": ma60_rising,
     }
 
 
 def score_valuation(fundamentals: dict[str, Any] | None = None) -> dict[str, Any]:
     data = fundamentals or {}
-    per = data.get("per")
-    pbr = data.get("pbr")
-    if per is None and pbr is None:
+    per = _num(data, "per", float("nan"))
+    pbr = _num(data, "pbr", float("nan"))
+    roe = _num(data, "roe", float("nan"))
+    debt_ratio = _num(data, "debtRatio", float("nan"))
+    operating_profit_growth = _num(data, "operatingProfitGrowth", float("nan"))
+    if all(pd.isna(value) for value in (per, pbr, roe, debt_ratio, operating_profit_growth)):
         return {
             "state": "NO_DATA",
-            "score": NEUTRAL_VALUATION_SCORE,
-            "reasons": ["valuation_data_missing_neutral"],
+            "score": 0.0,
+            "reasons": ["valuation_data_missing"],
         }
+
+    score = 0.0
+    reasons: list[str] = []
+    if not pd.isna(per):
+        if per <= 0:
+            score -= 35
+            reasons.append("negative_or_zero_earnings")
+        elif per <= 10:
+            score += 25
+            reasons.append("low_per")
+        elif per <= 20:
+            score += 15
+            reasons.append("reasonable_per")
+        elif per <= 35:
+            score += 5
+            reasons.append("elevated_but_positive_per")
+        elif per > 50:
+            score -= 15
+            reasons.append("high_per")
+    if not pd.isna(pbr):
+        if 0 < pbr <= 1.5:
+            score += 15
+            reasons.append("low_pbr")
+        elif pbr <= 3:
+            score += 7
+            reasons.append("reasonable_pbr")
+        elif pbr > 5:
+            score -= 10
+            reasons.append("high_pbr")
+    if not pd.isna(roe):
+        if roe >= 15:
+            score += 25
+            reasons.append("high_roe")
+        elif roe >= 8:
+            score += 12
+            reasons.append("positive_roe")
+        elif roe < 0:
+            score -= 25
+            reasons.append("negative_roe")
+    if not pd.isna(debt_ratio):
+        if debt_ratio <= 100:
+            score += 10
+            reasons.append("manageable_debt")
+        elif debt_ratio > 200:
+            score -= 15
+            reasons.append("high_debt")
+    if not pd.isna(operating_profit_growth):
+        if operating_profit_growth >= 10:
+            score += 10
+            reasons.append("operating_profit_growing")
+        elif operating_profit_growth <= -10:
+            score -= 10
+            reasons.append("operating_profit_shrinking")
     return {
-        "state": "UNIMPLEMENTED",
-        "score": NEUTRAL_VALUATION_SCORE,
-        "reasons": ["valuation_model_pending"],
+        "state": "VALUED",
+        "score": round(_clamp(score, -100.0, 100.0), 2),
+        "reasons": reasons,
     }
+
+
+def classify_ichimoku_state(df: pd.DataFrame) -> dict[str, Any]:
+    if len(df) < 27:
+        return {"state": "NO_DATA", "score": 0.0, "reasons": ["ichimoku_no_data"]}
+    last, prev = df.iloc[-1].to_dict(), df.iloc[-2].to_dict()
+    close = _num(last, "close")
+    cloud_top = max(_num(last, "senkou_a"), _num(last, "senkou_b"))
+    cloud_bottom = min(_num(last, "senkou_a"), _num(last, "senkou_b"))
+    leading_a, leading_b = _num(last, "senkou_a_leading"), _num(last, "senkou_b_leading")
+    past_close = _num(df.iloc[-27].to_dict(), "close")
+    if cloud_top <= 0 or leading_a <= 0 or past_close <= 0:
+        return {"state": "NO_DATA", "score": 0.0, "reasons": ["ichimoku_no_data"]}
+    score, reasons = 0.0, []
+    if close > cloud_top:
+        score += 35; reasons.append("price_above_cloud")
+    elif close < cloud_bottom:
+        score -= 35; reasons.append("price_below_cloud")
+    if _num(last, "tenkan") > _num(last, "kijun"):
+        score += 25; reasons.append("tenkan_above_kijun")
+    elif _num(last, "tenkan") < _num(last, "kijun"):
+        score -= 25; reasons.append("tenkan_below_kijun")
+    if leading_a > leading_b:
+        score += 15; reasons.append("bullish_forward_cloud")
+    elif leading_a < leading_b:
+        score -= 15; reasons.append("bearish_forward_cloud")
+    if close > past_close:
+        score += 15; reasons.append("chikou_confirmed")
+    elif close < past_close:
+        score -= 15; reasons.append("chikou_below_past_price")
+    return {"state": "BULLISH" if score > 0 else "BEARISH" if score < 0 else "NEUTRAL", "score": _clamp(score, -100, 100), "reasons": reasons}
+
+
+def classify_rsi_state(df: pd.DataFrame) -> dict[str, Any]:
+    if len(df) < 3:
+        return {"state": "NO_DATA", "score": 0.0, "reasons": ["rsi_no_data"]}
+    last, prev = df.iloc[-1].to_dict(), df.iloc[-2].to_dict()
+    rsi, prev_rsi, signal = _num(last, "rsi"), _num(prev, "rsi"), _num(last, "rsi_signal")
+    if rsi <= 0 or signal <= 0:
+        return {"state": "NO_DATA", "score": 0.0, "reasons": ["rsi_no_data"]}
+    score, reasons = 0.0, []
+    if prev_rsi < 50 <= rsi and rsi > signal:
+        score += 55; reasons.append("rsi_crossed_above_50_with_signal")
+    elif prev_rsi <= 30 < rsi and rsi > signal:
+        score += 35; reasons.append("rsi_oversold_recovery")
+    if rsi < 45 and rsi < signal and rsi < prev_rsi:
+        score -= 35; reasons.append("rsi_breakdown")
+    if len(df) >= 30:
+        recent = df.tail(10)
+        earlier = df.iloc[-30:-10]
+        if _num(last, "close") >= _series_num(recent, "close").max() * 0.98 and rsi < _series_num(earlier, "rsi").max() - 5:
+            score -= 30; reasons.append("bearish_rsi_divergence")
+    return {"state": "BULLISH" if score > 0 else "BEARISH" if score < 0 else "NEUTRAL", "score": _clamp(score, -100, 100), "reasons": reasons}
+
+
+def classify_volume_state(df: pd.DataFrame, bollinger_state: dict[str, Any]) -> dict[str, Any]:
+    if len(df) < 21:
+        return {"state": "NO_DATA", "score": 0.0, "reasons": ["volume_no_data"]}
+    last = df.iloc[-1].to_dict()
+    relative_volume = _num(last, "relative_volume")
+    prior_high = _series_num(df.iloc[-21:-1], "high").max()
+    close = _num(last, "close")
+    if relative_volume <= 0 or pd.isna(prior_high):
+        return {"state": "NO_DATA", "score": 0.0, "reasons": ["volume_no_data"]}
+    if close > prior_high and relative_volume >= 1.5:
+        return {"state": "BREAKOUT_CONFIRMED", "score": 55.0, "reasons": ["price_breakout_with_relative_volume"]}
+    if bollinger_state.get("state") == "SQUEEZE_RELEASE_UP" and relative_volume < 1.0:
+        return {"state": "SQUEEZE_RELEASE_WEAK_VOLUME", "score": -20.0, "reasons": ["squeeze_release_lacks_volume"]}
+    return {"state": "NEUTRAL", "score": 0.0, "reasons": ["no_volume_setup"], "relativeVolume": round(relative_volume, 4)}
 
 
 def score_latest(df: pd.DataFrame, fundamentals: dict[str, Any] | None = None) -> ScoreResult:
@@ -243,17 +317,9 @@ def score_latest(df: pd.DataFrame, fundamentals: dict[str, Any] | None = None) -
     close = _num(last, "close")
     reasons: list[str] = []
 
-    ichimoku = 0.0
-    cloud_top = max(_num(last, "senkou_a"), _num(last, "senkou_b"))
-    if cloud_top > 0 and close > cloud_top:
-        ichimoku += 45
-        reasons.append("price_above_cloud")
-    if _num(last, "tenkan") > _num(last, "kijun"):
-        ichimoku += 35
-        reasons.append("tenkan_above_kijun")
-    if _num(last, "senkou_a") > _num(last, "senkou_b"):
-        ichimoku += 20
-        reasons.append("bullish_cloud")
+    ichimoku_state = classify_ichimoku_state(df)
+    ichimoku = float(ichimoku_state["score"])
+    reasons.extend([f"ichimoku_{reason}" for reason in ichimoku_state["reasons"]])
 
     ma_state = classify_ma_support_state(df)
     ma_support = float(ma_state.get("score", 0.0))
@@ -265,38 +331,30 @@ def score_latest(df: pd.DataFrame, fundamentals: dict[str, Any] | None = None) -
     reasons.append(f"bollinger_state_{bollinger_state.get('state', 'UNKNOWN').lower()}")
     reasons.extend([f"bollinger_{reason}" for reason in bollinger_state.get("reasons", [])])
 
-    rsi_score = 0.0
-    rsi = _num(last, "rsi")
-    prev_rsi = _num(prev, "rsi")
-    if 45 <= rsi <= 65:
-        rsi_score += 65
-        reasons.append("rsi_momentum_zone")
-    elif 35 <= rsi < 45:
-        rsi_score += 35
-        reasons.append("rsi_recovery_zone")
-    if rsi > prev_rsi:
-        rsi_score += 35
-        reasons.append("rsi_rising")
+    rsi_state = classify_rsi_state(df)
+    rsi_score = float(rsi_state["score"])
+    reasons.extend([f"rsi_{reason}" for reason in rsi_state["reasons"]])
+    volume_state = classify_volume_state(df, bollinger_state)
+    volume_score = float(volume_state["score"])
+    reasons.extend([f"volume_{reason}" for reason in volume_state["reasons"]])
 
     penalty = 0.0
     if close < _num(last, "bb_lower"):
         penalty += 15
         reasons.append("penalty_below_lower_band")
-    if rsi >= 75:
-        penalty += 10
-        reasons.append("penalty_rsi_overheated")
 
     valuation_state = score_valuation(fundamentals)
-    valuation = float(valuation_state.get("score", NEUTRAL_VALUATION_SCORE))
+    valuation = float(valuation_state.get("score", 0.0))
     reasons.append(f"valuation_state_{valuation_state.get('state', 'UNKNOWN').lower()}")
     reasons.extend([f"valuation_{reason}" for reason in valuation_state.get("reasons", [])])
 
     component_scores = {
-        "ichimoku": _clamp(ichimoku),
-        "maSupport": _clamp(ma_support),
-        "bollinger": _clamp(bollinger),
-        "rsi": _clamp(rsi_score),
-        "valuation": _clamp(valuation),
+        "ichimoku": _clamp(ichimoku, -100.0, 100.0),
+        "maSupport": _clamp(ma_support, -100.0, 100.0),
+        "bollinger": _clamp(bollinger, -100.0, 100.0),
+        "rsi": _clamp(rsi_score, -100.0, 100.0),
+        "valuation": _clamp(valuation, -100.0, 100.0),
+        "volume": _clamp(volume_score, -100.0, 100.0),
         "penalty": _clamp(penalty),
     }
     confidence = (
@@ -305,27 +363,29 @@ def score_latest(df: pd.DataFrame, fundamentals: dict[str, Any] | None = None) -
         + component_scores["ichimoku"] * SCORING_WEIGHTS["ichimoku"]
         + component_scores["rsi"] * SCORING_WEIGHTS["rsi"]
         + component_scores["valuation"] * SCORING_WEIGHTS["valuation"]
+        + component_scores["volume"] * SCORING_WEIGHTS["volume"]
         - component_scores["penalty"]
     )
     confidence = round(_clamp(confidence), 2)
 
     bollinger_name = str(bollinger_state.get("state", "UNKNOWN"))
     high_quality_setup = (
-        bollinger_name in {"SQUEEZE_RELEASE_UP", "BAND_RIDE_UP"}
+        bollinger_name == "SQUEEZE_RELEASE_UP"
         and component_scores["ichimoku"] >= 75
         and component_scores["maSupport"] >= 70
-        and 45 <= rsi <= 72
+        and component_scores["rsi"] > 0
+        and component_scores["volume"] > 0
         and component_scores["penalty"] == 0
     )
     clean_buy_setup = (
-        bollinger_name not in {"FAILED_RELEASE", "DOWNSIDE_EXPANSION", "EXPANSION_CURL_NEUTRAL", "NO_DATA"}
-        and component_scores["ichimoku"] >= 55
+        bollinger_name in {"SQUEEZE", "SQUEEZE_RELEASE_UP"}
+        and component_scores["ichimoku"] > 0
         and component_scores["maSupport"] >= 55
         and component_scores["penalty"] < 15
     )
 
-    valuation_has_data = valuation_state.get("state") not in {"NO_DATA", "UNIMPLEMENTED"}
-    strong_threshold = 88.0 if valuation_has_data else 78.0
+    valuation_has_data = valuation_state.get("state") == "VALUED"
+    strong_threshold = 78.0 if valuation_has_data else 68.0
     buy_threshold = 70.0 if valuation_has_data else 62.0
 
     if confidence >= strong_threshold and high_quality_setup:
@@ -342,5 +402,5 @@ def score_latest(df: pd.DataFrame, fundamentals: dict[str, Any] | None = None) -
         label,
         component_scores,
         reasons,
-        {"bollinger": bollinger_state, "maSupport": ma_state, "valuation": valuation_state},
+        {"bollinger": bollinger_state, "maSupport": ma_state, "ichimoku": ichimoku_state, "rsi": rsi_state, "volume": volume_state, "valuation": valuation_state},
     )

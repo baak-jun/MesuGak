@@ -7,6 +7,7 @@ from io import StringIO
 from dataclasses import dataclass
 from typing import Iterable
 from urllib.request import Request, urlopen
+from typing import Any
 
 import pandas as pd
 
@@ -54,6 +55,48 @@ def load_ohlcv_with_fdr(code: str, lookback_days: int = 460) -> pd.DataFrame:
     end = dt.datetime.now()
     start = end - dt.timedelta(days=lookback_days)
     return normalize_ohlcv(fdr.DataReader(code, start, end))
+
+
+def _number_or_none(value: Any) -> float | None:
+    number = pd.to_numeric(value, errors="coerce")
+    return None if pd.isna(number) else float(number)
+
+
+def load_kr_fundamentals_with_fdr(code: str) -> dict[str, Any]:
+    """Load the latest reported annual fundamentals for a Korean stock.
+
+    FinanceDataReader's Naver financial-state feed also includes analyst
+    estimates.  Selecting the last row with a reported operating profit keeps
+    the strategy from scoring an unreported forecast as if it were an actual.
+    """
+    import FinanceDataReader as fdr
+
+    frame = fdr.SnapDataReader(f"NAVER/FINSTATE/{str(code).strip()}")
+    if frame is None or frame.empty:
+        return {}
+
+    reported = frame[pd.to_numeric(frame.get("영업이익"), errors="coerce").notna()].copy()
+    if reported.empty:
+        return {}
+    latest = reported.iloc[-1]
+    previous = reported.iloc[-2] if len(reported) >= 2 else None
+    operating_profit = _number_or_none(latest.get("영업이익"))
+    previous_operating_profit = _number_or_none(previous.get("영업이익")) if previous is not None else None
+    growth = None
+    if operating_profit is not None and previous_operating_profit not in (None, 0):
+        growth = (operating_profit / previous_operating_profit - 1.0) * 100.0
+
+    as_of = getattr(latest, "name", None)
+    return {
+        "source": "NAVER/FINSTATE",
+        "asOf": as_of.strftime("%Y-%m-%d") if hasattr(as_of, "strftime") else str(as_of or ""),
+        "per": _number_or_none(latest.get("PER(배)")),
+        "pbr": _number_or_none(latest.get("PBR(배)")),
+        "roe": _number_or_none(latest.get("ROE(%)")),
+        "debtRatio": _number_or_none(latest.get("부채비율")),
+        "operatingProfit": operating_profit,
+        "operatingProfitGrowth": growth,
+    }
 
 
 def targets_from_codes(codes: Iterable[str]) -> list[MarketTarget]:
