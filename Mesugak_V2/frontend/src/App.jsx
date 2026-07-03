@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import {
-  AlertTriangle,
   BarChart3,
   CandlestickChart,
   Cloud,
@@ -79,10 +78,6 @@ const mockSignals = [
   },
 ];
 
-const fallbackOrders = [
-  { time: '10:19', code: '005930', action: 'BUY', reason: 'confidence_rebalance', amount: '203,000', status: 'staged' },
-];
-
 const fallbackTradeLogs = [
   {
     time: '10:21',
@@ -127,8 +122,10 @@ const fallbackPortfolio = {
 const emptyTradeLogs = [];
 
 const emptyPortfolio = {
+  hasSnapshot: false,
   mode: 'paper',
   source: 'Firestore',
+  status: 'no_account_snapshot',
   market: 'KR',
   holdingCount: 0,
   cash: 0,
@@ -486,23 +483,6 @@ async function loadSignalsFromFirestore() {
   return rows.map(mapStockPayload);
 }
 
-async function loadOrdersFromFirestore() {
-  if (!firebaseReady || !db) return [];
-  const ordersQuery = query(collection(db, 'rebalance_orders'), where('market', 'in', ['KR', 'US']));
-  const snap = await getDocs(ordersQuery);
-  const rows = [];
-  snap.forEach((item) => rows.push({ id: item.id, ...item.data() }));
-  rows.sort((a, b) => Number(b.tradeAmount || 0) - Number(a.tradeAmount || 0));
-  return rows.map((order) => ({
-    time: formatTimestamp(order.updatedAt),
-    code: order.code,
-    action: order.side || 'HOLD',
-    reason: order.reason || '-',
-    amount: formatNumber(order.tradeAmount, 0),
-    status: 'staged',
-  }));
-}
-
 function buildLinePath(rows, key, xForIndex, yForValue) {
   return rows
     .map((row, index) => {
@@ -780,11 +760,19 @@ async function loadPortfolioFromFirestore() {
   const totalEvalAmt = Number(snapshot.totalEvalAmt ?? holdings.reduce((sum, item) => sum + Number(item.evalAmt || 0), 0));
   const totalBuyAmt = Number(snapshot.totalBuyAmt ?? holdings.reduce((sum, item) => sum + Number(item.buyAmt || 0), 0));
   return {
+    hasSnapshot: true,
     mode: snapshot.mode || 'paper',
+    source: snapshot.source || 'Firestore',
     market: snapshot.market || 'KR',
+    cash: Number(snapshot.cash ?? 0),
+    initialCash: Number(snapshot.initialCash ?? 0),
     holdingCount: Number(snapshot.holdingCount ?? holdings.length),
     totalEvalAmt,
     totalBuyAmt,
+    totalEquity: Number(snapshot.totalEquity ?? totalEvalAmt + Number(snapshot.cash ?? 0)),
+    realizedPnl: Number(snapshot.realizedPnl ?? 0),
+    unrealizedPnl: Number(snapshot.unrealizedPnl ?? 0),
+    totalPnl: Number(snapshot.totalPnl ?? 0),
     cashTargetPct: Number(snapshot.cashTargetPct ?? 0),
     updatedAt: snapshot.updatedAt,
     holdings,
@@ -1272,6 +1260,7 @@ function ScoreDock({ stock }) {
 }
 
 function PortfolioSnapshot({ portfolio }) {
+  const hasSnapshot = portfolio.hasSnapshot !== false;
   const totalEval = Number(portfolio.totalEvalAmt || 0);
   const totalBuy = Number(portfolio.totalBuyAmt || 0);
   const cash = Number(portfolio.cash || 0);
@@ -1293,23 +1282,23 @@ function PortfolioSnapshot({ portfolio }) {
       <div className="portfolio-grid">
         <div>
           <span>총자산</span>
-          <strong>{formatNumber(totalEquity, 0)}</strong>
+          <strong>{hasSnapshot ? formatNumber(totalEquity, 0) : '-'}</strong>
         </div>
         <div>
           <span>현금</span>
-          <strong>{formatNumber(cash, 0)}</strong>
+          <strong>{hasSnapshot ? formatNumber(cash, 0) : '-'}</strong>
         </div>
         <div>
           <span>평가금액</span>
-          <strong>{formatNumber(totalEval, 0)}</strong>
+          <strong>{hasSnapshot ? formatNumber(totalEval, 0) : '-'}</strong>
         </div>
         <div>
           <span>수익률</span>
-          <strong className={pnlPct >= 0 ? 'pnl-up' : 'pnl-down'}>{formatNumber(pnlPct, 2)}%</strong>
+          <strong className={pnlPct >= 0 ? 'pnl-up' : 'pnl-down'}>{hasSnapshot ? `${formatNumber(pnlPct, 2)}%` : '-'}</strong>
         </div>
         <div>
           <span>실현손익</span>
-          <strong className={realizedPnl >= 0 ? 'pnl-up' : 'pnl-down'}>{formatNumber(realizedPnl, 0)}</strong>
+          <strong className={realizedPnl >= 0 ? 'pnl-up' : 'pnl-down'}>{hasSnapshot ? formatNumber(realizedPnl, 0) : '-'}</strong>
         </div>
         <div>
           <span>보유</span>
@@ -1322,6 +1311,7 @@ function PortfolioSnapshot({ portfolio }) {
       </div>
 
       <div className="portfolio-holdings">
+        {!hasSnapshot && <div className="empty-watch">계좌 스냅샷이 아직 없거나 읽기 권한이 없습니다</div>}
         {holdings.length === 0 && <div className="empty-watch">보유 종목이 없습니다</div>}
         {holdings.slice(0, 5).map((holding) => (
           <div key={holding.code} className="holding-row">
@@ -1557,7 +1547,6 @@ function TradeLogPanel({ logs }) {
 
 export default function App() {
   const [signals, setSignals] = useState(mockSignals);
-  const [orders, setOrders] = useState(fallbackOrders);
   const [tradeLogs, setTradeLogs] = useState(firebaseReady ? emptyTradeLogs : fallbackTradeLogs);
   const [portfolio, setPortfolio] = useState(firebaseReady ? emptyPortfolio : fallbackPortfolio);
   const [runtimeMonitor, setRuntimeMonitor] = useState(firebaseReady ? emptyRuntime : fallbackRuntime);
@@ -1598,8 +1587,8 @@ export default function App() {
     candidates: signals.length,
     highConfidence: signals.filter((signal) => signal.confidence >= 80).length,
     maxCash: Math.max(...signals.map((signal) => Number(signal.cashTarget || 0)), 0),
-    staged: orders.filter((order) => order.status === 'staged').length,
-  }), [signals, orders]);
+    staged: Number(runtimeMonitor.orderCount || 0),
+  }), [signals, runtimeMonitor]);
 
   const filteredSignals = useMemo(() => {
     const queryText = searchText.trim().toLowerCase();
@@ -1656,12 +1645,6 @@ export default function App() {
         setLoadError(firebaseReady ? 'Firestore 분석 데이터가 아직 없습니다' : 'Firebase 환경 설정이 없습니다');
       }
       try {
-        const loadedOrders = await loadOrdersFromFirestore();
-        setOrders(loadedOrders.length > 0 ? loadedOrders : fallbackOrders);
-      } catch {
-        setOrders(fallbackOrders);
-      }
-      try {
         const loadedPortfolio = await loadPortfolioFromFirestore();
         setPortfolio(loadedPortfolio || (firebaseReady ? emptyPortfolio : fallbackPortfolio));
       } catch {
@@ -1681,7 +1664,6 @@ export default function App() {
       }
     } catch (error) {
       setSignals(mockSignals);
-      setOrders(fallbackOrders);
       setPortfolio(firebaseReady ? emptyPortfolio : fallbackPortfolio);
       setRuntimeMonitor(firebaseReady ? emptyRuntime : fallbackRuntime);
       setTradeLogs(firebaseReady ? emptyTradeLogs : fallbackTradeLogs);
@@ -2050,40 +2032,6 @@ export default function App() {
             <TradeLogPanel logs={tradeLogs} />
           </div>
         )}
-
-        <section className="orders-strip">
-          <div className="orders-header">
-            <div>
-              <p>Rebalance simulation</p>
-              <h3>Staged orders</h3>
-            </div>
-            <AlertTriangle size={18} />
-          </div>
-          <div className="order-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>Code</th>
-                  <th>Side</th>
-                  <th>Amount</th>
-                  <th>Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((order) => (
-                  <tr key={`${order.code}-${order.action}-${order.amount}`}>
-                    <td>{order.time}</td>
-                    <td>{order.code}</td>
-                    <td><span className={`side side-${String(order.action).toLowerCase()}`}>{order.action}</span></td>
-                    <td>{order.amount}</td>
-                    <td>{order.reason}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
       </section>
     </main>
   );

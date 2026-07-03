@@ -112,6 +112,55 @@ class KISPaperClient:
         except OSError:
             pass
 
+    def _clear_cached_token(self) -> None:
+        self._access_token = None
+        try:
+            self._token_cache_path().unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    @staticmethod
+    def _is_expired_token_error(exc: Exception) -> bool:
+        message = str(exc)
+        return "EGW00123" in message or "기간이 만료된 token" in message
+
+    def _auth_headers(self, tr_id: str, *, custtype: str | None = None) -> dict[str, str]:
+        headers = {
+            "authorization": f"Bearer {self.access_token()}",
+            "appkey": self.config.app_key,
+            "appsecret": self.config.app_secret,
+            "tr_id": tr_id,
+        }
+        if custtype:
+            headers["custtype"] = custtype
+        return headers
+
+    def _json_with_token_retry(
+        self,
+        path: str,
+        *,
+        tr_id: str,
+        method: str = "GET",
+        payload: dict | None = None,
+        params: dict | None = None,
+        custtype: str | None = None,
+    ) -> dict:
+        for attempt in range(2):
+            try:
+                return self._json(
+                    path,
+                    method=method,
+                    headers=self._auth_headers(tr_id, custtype=custtype),
+                    payload=payload,
+                    params=params,
+                )
+            except RuntimeError as exc:
+                if attempt == 0 and self._is_expired_token_error(exc):
+                    self._clear_cached_token()
+                    continue
+                raise
+        raise RuntimeError(f"KIS request failed after token retry for {path}")
+
     def access_token(self) -> str:
         if self._access_token:
             return self._access_token
@@ -128,9 +177,9 @@ class KISPaperClient:
         return token
 
     def quote(self, code: str) -> float:
-        response = self._json(
+        response = self._json_with_token_retry(
             "/uapi/domestic-stock/v1/quotations/inquire-price",
-            headers={"authorization": f"Bearer {self.access_token()}", "appkey": self.config.app_key, "appsecret": self.config.app_secret, "tr_id": "FHKST01010100"},
+            tr_id="FHKST01010100",
             params={"FID_COND_MRKT_DIV_CODE": "J", "FID_INPUT_ISCD": str(code)},
         )
         price = response.get("output", {}).get("stck_prpr")
@@ -142,13 +191,6 @@ class KISPaperClient:
         """Fetch the real KIS virtual-account balance and convert it to Mesugak ledger fields."""
         if market.upper() != "KR":
             raise ValueError("KIS paper balance sync currently supports KR only")
-        headers = {
-            "authorization": f"Bearer {self.access_token()}",
-            "appkey": self.config.app_key,
-            "appsecret": self.config.app_secret,
-            "tr_id": "VTTC8434R",
-            "custtype": "P",
-        }
         params = {
             "CANO": self.config.cano,
             "ACNT_PRDT_CD": self.config.account_product_code,
@@ -165,7 +207,7 @@ class KISPaperClient:
         rows: list[dict] = []
         summary: dict = {}
         while True:
-            response = self._json("/uapi/domestic-stock/v1/trading/inquire-balance", headers=headers, params=params)
+            response = self._json_with_token_retry("/uapi/domestic-stock/v1/trading/inquire-balance", tr_id="VTTC8434R", custtype="P", params=params)
             if response.get("rt_cd") != "0":
                 raise RuntimeError(f"KIS balance lookup failed: {response.get('msg1', 'unknown error')}")
             output1 = response.get("output1") or []
@@ -246,9 +288,9 @@ class KISPaperClient:
 
     def is_trading_day(self, target_date: date) -> bool:
         """Use KIS's domestic-stock holiday feed instead of guessing holidays."""
-        response = self._json(
+        response = self._json_with_token_retry(
             "/uapi/domestic-stock/v1/quotations/chk-holiday",
-            headers={"authorization": f"Bearer {self.access_token()}", "appkey": self.config.app_key, "appsecret": self.config.app_secret, "tr_id": "CTCA0903R"},
+            tr_id="CTCA0903R",
             params={"BASS_DT": target_date.strftime("%Y%m%d"), "CTX_AREA_NK": "", "CTX_AREA_FK": ""},
         )
         if response.get("rt_cd") != "0":
@@ -264,10 +306,11 @@ class KISPaperClient:
         if side not in {"BUY", "SELL"} or quantity <= 0:
             raise ValueError("KIS order requires BUY/SELL and a positive quantity")
         tr_id = "VTTC0802U" if side == "BUY" else "VTTC0801U"
-        response = self._json(
+        response = self._json_with_token_retry(
             "/uapi/domestic-stock/v1/trading/order-cash",
             method="POST",
-            headers={"authorization": f"Bearer {self.access_token()}", "appkey": self.config.app_key, "appsecret": self.config.app_secret, "tr_id": tr_id, "custtype": "P"},
+            tr_id=tr_id,
+            custtype="P",
             payload={"CANO": self.config.cano, "ACNT_PRDT_CD": self.config.account_product_code, "PDNO": str(code), "ORD_DVSN": "01", "ORD_QTY": str(quantity), "ORD_UNPR": "0"},
         )
         if response.get("rt_cd") != "0":

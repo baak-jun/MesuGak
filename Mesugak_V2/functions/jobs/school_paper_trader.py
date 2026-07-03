@@ -223,6 +223,44 @@ def save_runtime_state(repo: FirestoreStrategyRepository, payload: dict) -> None
     repo.append_intraday_runtime_event(payload)
 
 
+def sync_account_runtime_event(
+    repo: FirestoreStrategyRepository,
+    client: KISPaperClient,
+    args: argparse.Namespace,
+    *,
+    status: str,
+) -> dict:
+    market = str(args.market).upper()
+    try:
+        account, positions, account_sync = sync_kis_account(repo, client, market=market, initial_cash=args.initial_cash)
+        payload = {
+            "source": "Mesugak_V2",
+            "mode": "school_server_paper",
+            "status": status,
+            "market": market,
+            "accountSynced": True,
+            "holdingCount": len(positions),
+            "cash": account.get("cash"),
+            "totalEquity": account.get("totalEquity"),
+            "totalEvalAmt": account.get("totalEvalAmt"),
+            "totalBuyAmt": account.get("totalBuyAmt"),
+            "checkedAt": datetime.now(KST).isoformat(timespec="seconds"),
+            **account_sync,
+        }
+    except Exception as exc:  # noqa: BLE001 - account sync failure should be visible but not crash the loop.
+        payload = {
+            "source": "Mesugak_V2",
+            "mode": "school_server_paper",
+            "status": f"{status}_account_sync_failed",
+            "market": market,
+            "accountSynced": False,
+            "accountSyncError": f"{type(exc).__name__}: {exc}",
+            "checkedAt": datetime.now(KST).isoformat(timespec="seconds"),
+        }
+    save_runtime_state(repo, payload)
+    return payload
+
+
 def run(args: argparse.Namespace, *, repo: FirestoreStrategyRepository | None = None, client: KISPaperClient | None = None, candidates: list[dict] | None = None) -> dict:
     market = str(args.market).upper()
     repo = repo or FirestoreStrategyRepository(init_firestore(args.cred_path))
@@ -300,6 +338,15 @@ def run(args: argparse.Namespace, *, repo: FirestoreStrategyRepository | None = 
     repo.save_account_snapshot(result["snapshot"])
     runtime["executedCount"] = len(result["logs"])
     runtime["logs"] = result["logs"]
+    if result["logs"] and not getattr(args, "skip_account_sync", False):
+        try:
+            post_account, post_positions, post_sync = sync_kis_account(repo, client, market=market, initial_cash=args.initial_cash)
+            runtime["postOrderAccountSync"] = post_sync
+            runtime["cash"] = post_account.get("cash")
+            runtime["totalEquity"] = post_account.get("totalEquity")
+            runtime["holdingCount"] = len(post_positions)
+        except Exception as exc:  # noqa: BLE001 - keep order logs even if immediate balance sync fails.
+            runtime["postOrderAccountSync"] = {"accountSynced": False, "accountSyncError": f"{type(exc).__name__}: {exc}"}
     save_runtime_state(repo, runtime)
     return {"status": "applied", "market": market, "orderCount": len(orders), "executedCount": len(result["logs"]), "orders": orders, "quoteErrors": quote_errors, **account_sync}
 
@@ -388,10 +435,12 @@ def run_loop(args: argparse.Namespace) -> None:
     while True:
         now = datetime.now(KST)
         if now.weekday() >= 5:
-            log_event({"status": "market_closed_weekend"})
+            log_event(sync_account_runtime_event(repo, client, args, status="market_closed_weekend"))
             return
         if now.time() > end:
-            log_event({"status": "market_session_complete", "sessionEndedAt": now.isoformat()})
+            payload = sync_account_runtime_event(repo, client, args, status="market_session_complete")
+            payload["sessionEndedAt"] = now.isoformat()
+            log_event(payload)
             return
         if now.time() >= start:
             try:
