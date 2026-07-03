@@ -116,6 +116,113 @@ def sync_kis_account(
     return account, positions, {"accountSynced": True, "holdingCount": len(positions), "cash": account.get("cash"), "totalEquity": account.get("totalEquity")}
 
 
+def _score(item: dict) -> float:
+    return float(item.get("confidenceScore", item.get("score", 0)) or 0)
+
+
+def _candidate_status(item: dict) -> str:
+    return str(item.get("status", item.get("confidenceLabel", ""))).upper()
+
+
+def _is_buy_eligible(item: dict, cfg: IntradayPolicyConfig, positions: dict[str, dict], prices: dict[str, float]) -> bool:
+    code = str(item.get("code", ""))
+    return (
+        bool(code)
+        and code not in positions
+        and _score(item) >= cfg.buy_score_min
+        and _candidate_status(item) not in {"DEFENSIVE", "AVOID"}
+        and float(prices.get(code, 0) or 0) > 0
+    )
+
+
+def _runtime_candidate(item: dict, *, prices: dict[str, float], positions: dict[str, dict], cfg: IntradayPolicyConfig) -> dict:
+    code = str(item.get("code", ""))
+    position = positions.get(code) or {}
+    price = float(prices.get(code, position.get("lastPrice", item.get("currentPrice", 0))) or 0)
+    return {
+        "code": code,
+        "name": item.get("name", code),
+        "market": item.get("market"),
+        "confidenceScore": _score(item),
+        "status": item.get("status", item.get("confidenceLabel")),
+        "confidenceLabel": item.get("confidenceLabel"),
+        "riskState": item.get("riskState"),
+        "price": price,
+        "held": code in positions,
+        "quantity": float(position.get("quantity", 0) or 0),
+        "eligibleToBuy": _is_buy_eligible(item, cfg, positions, prices),
+    }
+
+
+def build_runtime_state(
+    *,
+    status: str,
+    market: str,
+    candidates: list[dict],
+    live_candidates: list[dict],
+    positions: dict[str, dict],
+    account: dict,
+    prices: dict[str, float],
+    quote_errors: dict[str, str],
+    orders: list[dict],
+    cfg: IntradayPolicyConfig,
+    account_sync: dict,
+    execute: bool,
+    max_live_candidates: int,
+) -> dict:
+    monitored = [_runtime_candidate(item, prices=prices, positions=positions, cfg=cfg) for item in live_candidates]
+    buy_watch = [_runtime_candidate(item, prices=prices, positions=positions, cfg=cfg) for item in candidates if _is_buy_eligible(item, cfg, positions, prices)]
+    buy_watch.sort(key=lambda item: float(item.get("confidenceScore", 0) or 0), reverse=True)
+    held_watch = [
+        {
+            "code": str(code),
+            "name": position.get("name", code),
+            "quantity": float(position.get("quantity", 0) or 0),
+            "buyPrice": float(position.get("buyPrice", 0) or 0),
+            "lastPrice": float(prices.get(str(code), position.get("lastPrice", 0)) or 0),
+            "highestPrice": float(position.get("highestPrice", 0) or 0),
+            "score": _score(next((item for item in candidates if str(item.get("code")) == str(code)), {})),
+        }
+        for code, position in positions.items()
+    ]
+    return {
+        "source": "Mesugak_V2",
+        "mode": "school_server_paper",
+        "status": status,
+        "market": market,
+        "execute": bool(execute),
+        "maxLiveCandidates": max_live_candidates,
+        "candidateCount": len(candidates),
+        "monitoredCount": len(monitored),
+        "buyWatchCount": len(buy_watch),
+        "holdingCount": len(positions),
+        "orderCount": len(orders),
+        "quoteErrorCount": len(quote_errors),
+        "accountSynced": bool(account_sync.get("accountSynced")),
+        "accountSyncError": account_sync.get("accountSyncError"),
+        "cash": account.get("cash"),
+        "totalEquity": account.get("totalEquity"),
+        "policy": {
+            "buyScoreMin": cfg.buy_score_min,
+            "scoreExitThreshold": cfg.score_exit_threshold,
+            "trailingStopPct": cfg.trailing_stop_pct,
+            "positionWeight": cfg.position_weight,
+            "rotationScoreGap": cfg.rotation_score_gap,
+        },
+        "monitored": monitored,
+        "buyWatch": buy_watch[:50],
+        "holdingsWatch": held_watch,
+        "orders": orders,
+        "quoteErrors": quote_errors,
+        "checkedAt": datetime.now(KST).isoformat(timespec="seconds"),
+    }
+
+
+def save_runtime_state(repo: FirestoreStrategyRepository, payload: dict) -> None:
+    repo.save_intraday_runtime_state(payload)
+    repo.append_intraday_runtime_event(payload)
+
+
 def run(args: argparse.Namespace, *, repo: FirestoreStrategyRepository | None = None, client: KISPaperClient | None = None, candidates: list[dict] | None = None) -> dict:
     market = str(args.market).upper()
     repo = repo or FirestoreStrategyRepository(init_firestore(args.cred_path))
@@ -128,7 +235,25 @@ def run(args: argparse.Namespace, *, repo: FirestoreStrategyRepository | None = 
         except Exception as exc:  # noqa: BLE001 - executing without verified account state is unsafe.
             account_sync = {"accountSynced": False, "accountSyncError": f"{type(exc).__name__}: {exc}"}
             if args.execute:
-                return {"status": "account_sync_failed", "market": market, "orderCount": 0, "executedCount": 0, "orders": [], "prices": {}, "quoteErrors": {}, **account_sync}
+                payload = {"status": "account_sync_failed", "market": market, "orderCount": 0, "executedCount": 0, "orders": [], "prices": {}, "quoteErrors": {}, **account_sync}
+                cfg = IntradayPolicyConfig(args.buy_score_min, args.score_exit_threshold, args.trailing_stop_pct, args.position_weight, args.rotation_score_gap)
+                runtime = build_runtime_state(
+                    status="account_sync_failed",
+                    market=market,
+                    candidates=candidates,
+                    live_candidates=[],
+                    positions={},
+                    account=initialize_account(args.initial_cash, market),
+                    prices={},
+                    quote_errors={},
+                    orders=[],
+                    cfg=cfg,
+                    account_sync=account_sync,
+                    execute=args.execute,
+                    max_live_candidates=args.max_live_candidates,
+                )
+                save_runtime_state(repo, runtime)
+                return payload
             positions = repo.fetch_current_positions()
             account = repo.fetch_account_snapshot() or initialize_account(args.initial_cash, market)
     else:
@@ -147,7 +272,24 @@ def run(args: argparse.Namespace, *, repo: FirestoreStrategyRepository | None = 
     equity = float(account.get("totalEquity", account.get("cash", args.initial_cash)) or args.initial_cash)
     policy = IntradayPolicyConfig(args.buy_score_min, args.score_exit_threshold, args.trailing_stop_pct, args.position_weight, args.rotation_score_gap)
     orders = build_intraday_orders(candidates, positions, equity, float(account.get("cash", 0) or 0), prices, policy)
+    status = "dry_run" if not args.execute else "applied"
+    runtime = build_runtime_state(
+        status=status,
+        market=market,
+        candidates=candidates,
+        live_candidates=live_candidates,
+        positions=positions,
+        account=account,
+        prices=prices,
+        quote_errors=quote_errors,
+        orders=orders,
+        cfg=policy,
+        account_sync=account_sync,
+        execute=args.execute,
+        max_live_candidates=args.max_live_candidates,
+    )
     if not args.execute:
+        save_runtime_state(repo, runtime)
         return {"status": "dry_run", "market": market, "orderCount": len(orders), "orders": orders, "prices": prices, "quoteErrors": quote_errors, **account_sync}
     result = apply_paper_orders(account, positions, orders, prices, market=market, initial_cash=args.initial_cash)
     for log in result["logs"]:
@@ -156,6 +298,9 @@ def run(args: argparse.Namespace, *, repo: FirestoreStrategyRepository | None = 
     repo.save_paper_positions(result["positions"], previous_codes=set(positions))
     repo.append_trade_logs(result["logs"])
     repo.save_account_snapshot(result["snapshot"])
+    runtime["executedCount"] = len(result["logs"])
+    runtime["logs"] = result["logs"]
+    save_runtime_state(repo, runtime)
     return {"status": "applied", "market": market, "orderCount": len(orders), "executedCount": len(result["logs"]), "orders": orders, "quoteErrors": quote_errors, **account_sync}
 
 

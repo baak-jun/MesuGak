@@ -88,5 +88,15 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+
+    match /paper_trading_runtime/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /paper_trading_runtime_events/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
   }
 }

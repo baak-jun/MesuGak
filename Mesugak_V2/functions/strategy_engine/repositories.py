@@ -204,6 +204,27 @@ class FirestoreStrategyRepository:
         data["updatedAt"] = self._server_timestamp()
         self.db.collection(collection_name).document(doc_id).set(data, merge=True)
 
+    def save_intraday_runtime_state(
+        self,
+        payload: dict[str, Any],
+        *,
+        collection_name: str = "paper_trading_runtime",
+        doc_id: str = "latest",
+    ) -> None:
+        data = dict(payload)
+        data["updatedAt"] = self._server_timestamp()
+        self.db.collection(collection_name).document(doc_id).set(data, merge=True)
+
+    def append_intraday_runtime_event(
+        self,
+        payload: dict[str, Any],
+        *,
+        collection_name: str = "paper_trading_runtime_events",
+    ) -> None:
+        data = dict(payload)
+        data["createdAt"] = self._server_timestamp()
+        self.db.collection(collection_name).add(data)
+
     def save_paper_order_application(self, application_id: str, payload: dict[str, Any]) -> None:
         data = dict(payload)
         data["updatedAt"] = self._server_timestamp()

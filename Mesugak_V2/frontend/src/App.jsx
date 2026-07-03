@@ -124,6 +124,62 @@ const fallbackPortfolio = {
   ],
 };
 
+const emptyTradeLogs = [];
+
+const emptyPortfolio = {
+  mode: 'paper',
+  source: 'Firestore',
+  market: 'KR',
+  holdingCount: 0,
+  cash: 0,
+  initialCash: 0,
+  totalEvalAmt: 0,
+  totalBuyAmt: 0,
+  totalEquity: 0,
+  realizedPnl: 0,
+  unrealizedPnl: 0,
+  totalPnl: 0,
+  cashTargetPct: 0,
+  holdings: [],
+};
+
+const fallbackRuntime = {
+  mode: 'mock',
+  source: 'mock',
+  status: 'waiting',
+  market: 'KR',
+  candidateCount: 0,
+  monitoredCount: 0,
+  buyWatchCount: 0,
+  holdingCount: 0,
+  orderCount: 0,
+  quoteErrorCount: 0,
+  monitored: [],
+  buyWatch: [],
+  holdingsWatch: [],
+  orders: [],
+  quoteErrors: {},
+  checkedAt: '2026-07-03',
+};
+
+const emptyRuntime = {
+  mode: 'school_server_paper',
+  source: 'Firestore',
+  status: 'no_runtime_snapshot',
+  market: 'KR',
+  candidateCount: 0,
+  monitoredCount: 0,
+  buyWatchCount: 0,
+  holdingCount: 0,
+  orderCount: 0,
+  quoteErrorCount: 0,
+  monitored: [],
+  buyWatch: [],
+  holdingsWatch: [],
+  orders: [],
+  quoteErrors: {},
+};
+
 const componentMeta = {
   ichimoku: { label: '일목균형표', max: 100 },
   maSupport: { label: '이동평균선', max: 100 },
@@ -260,10 +316,22 @@ function formatNumber(value, digits = 0) {
 }
 
 function formatTimestamp(value) {
-  if (!value) return '-';
-  if (value.toDate) return value.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const date = toDateValue(value);
+  return date ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
+}
+
+function toDateValue(value) {
+  if (!value) return null;
+  if (value.toDate) return value.toDate();
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function monthKeyFromDate(date) {
+  if (!date) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
 }
 
 function compactDate(value) {
@@ -658,20 +726,26 @@ async function loadTradeLogsFromFirestore() {
     const bDate = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
     return bDate.getTime() - aDate.getTime();
   });
-  return rows.slice(0, 100).map((log) => ({
-    time: formatTimestamp(log.createdAt),
-    code: log.code,
-    name: log.name || log.code,
-    action: log.action || '-',
-    amount: formatNumber(log.amount, 0),
-    price: formatNumber(log.price, 0),
-    quantity: Number(log.quantity || 0),
-    reason: log.reason || '-',
-    pnlPct: log.pnlPct,
-    pnl: log.pnl,
-    source: log.source || 'legacy',
-    brokerOrderNo: log.brokerOrderNo || '',
-  }));
+  return rows.slice(0, 300).map((log) => {
+    const createdDate = toDateValue(log.createdAt);
+    return {
+      time: formatDateTime(log.createdAt),
+      code: log.code,
+      name: log.name || log.code,
+      action: log.action || '-',
+      amount: formatNumber(log.amount, 0),
+      price: formatNumber(log.price, 0),
+      quantity: Number(log.quantity || 0),
+      reason: log.reason || '-',
+      pnlPct: log.pnlPct,
+      pnl: log.pnl,
+      source: log.source || 'legacy',
+      brokerOrderNo: log.brokerOrderNo || '',
+      orderStatus: log.orderStatus || (log.errorMessage ? 'FAILED' : 'EXECUTED'),
+      errorMessage: log.errorMessage || '',
+      monthKey: monthKeyFromDate(createdDate),
+    };
+  });
 }
 
 function mapPortfolioPosition(payload, fallbackCode = '') {
@@ -715,6 +789,13 @@ async function loadPortfolioFromFirestore() {
     updatedAt: snapshot.updatedAt,
     holdings,
   };
+}
+
+async function loadRuntimeFromFirestore() {
+  if (!firebaseReady || !db) return null;
+  const runtimeSnap = await getDoc(doc(db, 'paper_trading_runtime', 'latest'));
+  if (!runtimeSnap.exists()) return null;
+  return { id: runtimeSnap.id, ...runtimeSnap.data() };
 }
 
 function indicatorStylesForTheme(themeKey) {
@@ -1261,18 +1342,112 @@ function PortfolioSnapshot({ portfolio }) {
   );
 }
 
+function RuntimeMonitorPanel({ runtime }) {
+  const monitored = Array.isArray(runtime.monitored) ? runtime.monitored : [];
+  const buyWatch = Array.isArray(runtime.buyWatch) ? runtime.buyWatch : [];
+  const holdingsWatch = Array.isArray(runtime.holdingsWatch) ? runtime.holdingsWatch : [];
+  const orders = Array.isArray(runtime.orders) ? runtime.orders : [];
+  const quoteErrors = runtime.quoteErrors && typeof runtime.quoteErrors === 'object' ? runtime.quoteErrors : {};
+
+  return (
+    <section className="runtime-monitor">
+      <div className="orders-header">
+        <div>
+          <p>School server monitor · {runtime.market || 'KR'} · {runtime.status || '-'}</p>
+          <h3>Runtime watch</h3>
+        </div>
+        <Gauge size={18} />
+      </div>
+
+      <div className="execution-summary runtime-summary">
+        <div>
+          <span>감시</span>
+          <strong>{formatNumber(runtime.monitoredCount ?? monitored.length, 0)}</strong>
+        </div>
+        <div>
+          <span>매수 후보</span>
+          <strong>{formatNumber(runtime.buyWatchCount ?? buyWatch.length, 0)}</strong>
+        </div>
+        <div>
+          <span>보유 감시</span>
+          <strong>{formatNumber(runtime.holdingCount ?? holdingsWatch.length, 0)}</strong>
+        </div>
+        <div>
+          <span>최근 확인</span>
+          <strong>{formatDateTime(runtime.updatedAt || runtime.checkedAt)}</strong>
+        </div>
+      </div>
+
+      <div className="runtime-grid">
+        <div className="runtime-card">
+          <div className="runtime-card-title">
+            <span>매수 고려 종목</span>
+            <strong>{buyWatch.length}</strong>
+          </div>
+          {buyWatch.length === 0 && <div className="empty-watch">현재 매수 조건을 통과한 종목이 없습니다</div>}
+          {buyWatch.slice(0, 8).map((item) => (
+            <div key={`buy-${item.code}`} className="runtime-row">
+              <span>
+                <strong>{item.name || item.code}</strong>
+                <small>{item.code} · {item.status || '-'}</small>
+              </span>
+              <span>
+                <strong>{formatNumber(item.confidenceScore, 1)}</strong>
+                <small>{formatNumber(item.price, 0)}</small>
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div className="runtime-card">
+          <div className="runtime-card-title">
+            <span>감시 중인 종목</span>
+            <strong>{monitored.length}</strong>
+          </div>
+          {monitored.length === 0 && <div className="empty-watch">아직 감시 스냅샷이 없습니다</div>}
+          {monitored.slice(0, 8).map((item) => (
+            <div key={`watch-${item.code}`} className="runtime-row">
+              <span>
+                <strong>{item.name || item.code}</strong>
+                <small>{item.code} · {item.held ? '보유중' : '미보유'}</small>
+              </span>
+              <span>
+                <strong>{formatNumber(item.confidenceScore, 1)}</strong>
+                <small>{item.eligibleToBuy ? '매수 가능' : item.riskState || '-'}</small>
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="runtime-footer">
+        <span>주문 예정 {formatNumber(orders.length, 0)}건</span>
+        <span>시세 오류 {formatNumber(Object.keys(quoteErrors).length, 0)}건</span>
+        <span>계좌 동기화 {runtime.accountSynced ? '성공' : '미확인'}</span>
+      </div>
+    </section>
+  );
+}
+
 function TradeLogPanel({ logs }) {
+  const currentMonthKey = monthKeyFromDate(new Date());
+  const [monthFilter, setMonthFilter] = useState(currentMonthKey);
   const [actionFilter, setActionFilter] = useState('ALL');
   const [sourceFilter, setSourceFilter] = useState('ALL');
+  const monthOptions = useMemo(() => {
+    const unique = Array.from(new Set(logs.map((log) => log.monthKey).filter(Boolean)));
+    return ['ALL', ...Array.from(new Set([currentMonthKey, ...unique])).sort().reverse()];
+  }, [logs, currentMonthKey]);
   const sources = useMemo(() => {
     const unique = Array.from(new Set(logs.map((log) => log.source || 'legacy')));
     return ['ALL', ...unique.sort()];
   }, [logs]);
   const filteredLogs = useMemo(() => logs.filter((log) => {
+    const matchesMonth = monthFilter === 'ALL' || log.monthKey === monthFilter;
     const matchesAction = actionFilter === 'ALL' || String(log.action).toUpperCase() === actionFilter;
     const matchesSource = sourceFilter === 'ALL' || String(log.source || 'legacy') === sourceFilter;
-    return matchesAction && matchesSource;
-  }), [logs, actionFilter, sourceFilter]);
+    return matchesMonth && matchesAction && matchesSource;
+  }), [logs, monthFilter, actionFilter, sourceFilter]);
   const executionSummary = useMemo(() => ({
     buyCount: filteredLogs.filter((log) => String(log.action).toUpperCase() === 'BUY').length,
     sellCount: filteredLogs.filter((log) => String(log.action).toUpperCase() === 'SELL').length,
@@ -1288,6 +1463,13 @@ function TradeLogPanel({ logs }) {
           <h3>Execution history</h3>
         </div>
         <div className="execution-filters">
+          <select value={monthFilter} onChange={(event) => setMonthFilter(event.target.value)} aria-label="Execution month filter">
+            {monthOptions.map((month) => (
+              <option key={month} value={month}>
+                {month === 'ALL' ? 'All months' : month === currentMonthKey ? `${month} (this month)` : month}
+              </option>
+            ))}
+          </select>
           <select value={actionFilter} onChange={(event) => setActionFilter(event.target.value)} aria-label="Execution action filter">
             <option value="ALL">전체 체결</option>
             <option value="BUY">매수</option>
@@ -1333,6 +1515,7 @@ function TradeLogPanel({ logs }) {
               <th>Price</th>
               <th>Amount</th>
               <th>PnL</th>
+              <th>Status</th>
               <th>Reason</th>
               <th>Broker order</th>
             </tr>
@@ -1340,7 +1523,7 @@ function TradeLogPanel({ logs }) {
           <tbody>
             {filteredLogs.length === 0 && (
               <tr>
-                <td colSpan={8} className="empty-table-cell">최근 체결 로그가 없습니다</td>
+                <td colSpan={10} className="empty-table-cell">최근 체결 로그가 없습니다</td>
               </tr>
             )}
             {filteredLogs.map((log) => (
@@ -1360,7 +1543,8 @@ function TradeLogPanel({ logs }) {
                   {log.pnl !== undefined ? formatNumber(Number(log.pnl || 0), 0) : '-'}
                   {log.pnlPct !== undefined ? ` (${formatNumber(Number(log.pnlPct || 0), 2)}%)` : ''}
                 </td>
-                <td>{log.reason}</td>
+                <td>{log.orderStatus || '-'}</td>
+                <td>{log.errorMessage || log.reason}</td>
                 <td>{log.brokerOrderNo || '-'}</td>
               </tr>
             ))}
@@ -1374,8 +1558,9 @@ function TradeLogPanel({ logs }) {
 export default function App() {
   const [signals, setSignals] = useState(mockSignals);
   const [orders, setOrders] = useState(fallbackOrders);
-  const [tradeLogs, setTradeLogs] = useState(fallbackTradeLogs);
-  const [portfolio, setPortfolio] = useState(fallbackPortfolio);
+  const [tradeLogs, setTradeLogs] = useState(firebaseReady ? emptyTradeLogs : fallbackTradeLogs);
+  const [portfolio, setPortfolio] = useState(firebaseReady ? emptyPortfolio : fallbackPortfolio);
+  const [runtimeMonitor, setRuntimeMonitor] = useState(firebaseReady ? emptyRuntime : fallbackRuntime);
   const [selectedId, setSelectedId] = useState(mockSignals[0].id);
   const [loading, setLoading] = useState(true);
   const [detailLoadingId, setDetailLoadingId] = useState('');
@@ -1478,21 +1663,28 @@ export default function App() {
       }
       try {
         const loadedPortfolio = await loadPortfolioFromFirestore();
-        setPortfolio(loadedPortfolio || fallbackPortfolio);
+        setPortfolio(loadedPortfolio || (firebaseReady ? emptyPortfolio : fallbackPortfolio));
       } catch {
-        setPortfolio(fallbackPortfolio);
+        setPortfolio(firebaseReady ? emptyPortfolio : fallbackPortfolio);
+      }
+      try {
+        const loadedRuntime = await loadRuntimeFromFirestore();
+        setRuntimeMonitor(loadedRuntime || (firebaseReady ? emptyRuntime : fallbackRuntime));
+      } catch {
+        setRuntimeMonitor(firebaseReady ? emptyRuntime : fallbackRuntime);
       }
       try {
         const loadedLogs = await loadTradeLogsFromFirestore();
-        setTradeLogs(loadedLogs.length > 0 ? loadedLogs : fallbackTradeLogs);
+        setTradeLogs(loadedLogs.length > 0 ? loadedLogs : (firebaseReady ? emptyTradeLogs : fallbackTradeLogs));
       } catch {
-        setTradeLogs(fallbackTradeLogs);
+        setTradeLogs(firebaseReady ? emptyTradeLogs : fallbackTradeLogs);
       }
     } catch (error) {
       setSignals(mockSignals);
       setOrders(fallbackOrders);
-      setPortfolio(fallbackPortfolio);
-      setTradeLogs(fallbackTradeLogs);
+      setPortfolio(firebaseReady ? emptyPortfolio : fallbackPortfolio);
+      setRuntimeMonitor(firebaseReady ? emptyRuntime : fallbackRuntime);
+      setTradeLogs(firebaseReady ? emptyTradeLogs : fallbackTradeLogs);
       setLoadError(error?.message || 'Firestore 불러오기 실패');
     } finally {
       setLoading(false);
@@ -1632,6 +1824,11 @@ export default function App() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (!user || !settingsReady || !firebaseReady || !db) return;
+    refreshSignals();
+  }, [user?.uid, settingsReady]);
 
   useEffect(() => {
     if (!user || !db || !settingsReady) return undefined;
@@ -1849,6 +2046,7 @@ export default function App() {
         {workspaceView === 'executions' && (
           <div className="execution-page">
             <PortfolioSnapshot portfolio={portfolio} />
+            <RuntimeMonitorPanel runtime={runtimeMonitor} />
             <TradeLogPanel logs={tradeLogs} />
           </div>
         )}

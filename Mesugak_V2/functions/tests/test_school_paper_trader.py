@@ -38,6 +38,8 @@ class FakeRepo:
     def __init__(self):
         self.saved_positions = None
         self.saved_snapshot = None
+        self.runtime_state = None
+        self.runtime_events = []
 
     def fetch_meta_candidates(self, market: str) -> list[dict]:
         return []
@@ -53,6 +55,12 @@ class FakeRepo:
 
     def save_account_snapshot(self, payload):
         self.saved_snapshot = payload
+
+    def save_intraday_runtime_state(self, payload):
+        self.runtime_state = payload
+
+    def append_intraday_runtime_event(self, payload):
+        self.runtime_events.append(payload)
 
 
 class SchoolPaperTraderTests(unittest.TestCase):
@@ -85,11 +93,15 @@ class SchoolPaperTraderTests(unittest.TestCase):
             {"code": "BAD", "name": "Bad", "confidenceScore": 69, "status": "BUY_CANDIDATE"},
         ]
 
-        result = run(args, repo=FakeRepo(), client=FakeClient({"AAA": 100.0}, {"BAD"}), candidates=candidates)
+        repo = FakeRepo()
+        result = run(args, repo=repo, client=FakeClient({"AAA": 100.0}, {"BAD"}), candidates=candidates)
 
         self.assertEqual(result["status"], "dry_run")
         self.assertEqual(result["prices"], {"AAA": 100.0})
         self.assertIn("BAD", result["quoteErrors"])
+        self.assertIsNotNone(repo.runtime_state)
+        self.assertEqual(repo.runtime_state["buyWatchCount"], 1)
+        self.assertEqual(repo.runtime_events[0]["monitoredCount"], 2)
 
     def test_execute_is_blocked_when_account_sync_fails(self) -> None:
         args = argparse.Namespace(
@@ -109,11 +121,13 @@ class SchoolPaperTraderTests(unittest.TestCase):
             cred_path=None,
         )
 
-        result = run(args, repo=FakeRepo(), client=FakeClient({}, balance_error=RuntimeError("balance unavailable")), candidates=[])
+        repo = FakeRepo()
+        result = run(args, repo=repo, client=FakeClient({}, balance_error=RuntimeError("balance unavailable")), candidates=[])
 
         self.assertEqual(result["status"], "account_sync_failed")
         self.assertEqual(result["executedCount"], 0)
         self.assertIn("balance unavailable", result["accountSyncError"])
+        self.assertEqual(repo.runtime_state["status"], "account_sync_failed")
 
 
 if __name__ == "__main__":
