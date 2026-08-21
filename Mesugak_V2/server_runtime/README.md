@@ -1,4 +1,4 @@
-﻿# Managed school-server runtime
+# Managed school-server runtime
 
 This folder is the repository-tracked source for files deployed to the school server.
 
@@ -24,10 +24,13 @@ The current server cron can continue invoking its existing `run_kr_close.sh` and
 ## V2 migration
 
 `run_v2_kr_close.sh` and `run_v2_us_close.sh` are the V2 entry points. They run
-`functions/jobs/analyze_market.py`, which writes `meta_v2_*` documents used by
-the V2 frontend. Deploy the whole `Mesugak_V2/functions/` directory and both
-runner scripts to the path set by `MESUGAK_V2_ROOT`, then create `.env.server`
-from `.env.server.example`.
+`functions/jobs/analyze_market.py`, which writes private `meta_v2_*` documents.
+After a successful analysis they also run `publish_public_analysis.py`, which
+writes the price-free `public_analysis_meta` feed. The deployed Firestore rule
+currently keeps that feed administrator-only pending written data-rights review.
+Deploy the whole `Mesugak_V2/functions/` directory and both runner scripts to
+the path set by `MESUGAK_V2_ROOT`, then create `.env.server` from
+`.env.server.example`.
 
 For the managed school-server layout, use:
 
@@ -40,3 +43,37 @@ The US wrapper checks the New York trading-day close and records a date stamp,
 so the two calls handle daylight saving time without duplicate analysis.
 
 Never commit the actual `.env.server` file or service-account JSON.
+
+## On-demand paper-account refresh
+
+`run_paper_refresh_requests.sh` is the managed school-server entry point for
+browser-triggered KIS virtual-account refreshes. It only runs
+`school_paper_trader.py --process-refresh-requests`; it cannot create or submit
+an order.
+
+Deploy it alongside the V2 functions directory, then add this cron line on the
+school server (KST):
+
+```cron
+* 8-18 * * * /usr/bin/flock -n /tmp/mesugak-paper-refresh.lock /home/2023112374/mesugak/v2/run_paper_refresh_requests.sh >> /home/2023112374/mesugak/logs/paper_refresh_$(date +\%Y-\%m).log 2>&1
+```
+
+The worker reads only pending requests, so an idle run makes no KIS API call.
+
+## Administrator-only KIS paper performance comparison
+
+The KR close runner also calls `publish_private_performance.py`. It writes only
+an aggregate, administrator-only comparison document at
+`paper_performance_private/latest`; it never writes a KIS account number,
+holdings, trades, token, or raw index levels to that document.
+
+Before its first run, set the actual virtual-account experiment start date in
+the school server's `functions/.env`:
+
+```bash
+MESUGAK_PERFORMANCE_BASELINE_DATE=YYYY-MM-DD
+```
+
+The job skips safely when that date is blank. Use the same date for the KIS
+account and KOSPI/KOSDAQ comparison; do not expose this comparison publicly
+without a separate data-rights and legal review.

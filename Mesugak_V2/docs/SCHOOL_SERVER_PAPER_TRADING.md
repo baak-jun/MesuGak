@@ -82,3 +82,46 @@ Before the loop starts, the runner checks KIS's domestic-stock holiday feed.
 On a non-operating day it exits immediately without polling quotes or creating
 orders. The default environment path is `functions/.env`, independent of the
 cron working directory; set `MESUGAK_ENV_FILE` only to override it.
+
+## On-demand account refresh from the web
+
+The **모의투자 새로고침** button does not call KIS from the browser. An
+administrator-authenticated browser creates a `paper_refresh_requests` document;
+the school server reads it, calls only KIS `inquire-balance`, writes the fresh
+`bot_account_snapshot` and `bot_portfolio` values, then marks the request
+`completed` or `failed`.
+
+This path does **not** load strategy candidates, request per-symbol quotes,
+create paper orders, or submit trades.
+
+Install the managed worker and process waiting requests once per minute while
+the site is normally used (server timezone: Asia/Seoul):
+
+```bash
+chmod 755 ~/mesugak/v2/run_paper_refresh_requests.sh
+```
+
+```cron
+* 8-18 * * * /usr/bin/flock -n /tmp/mesugak-paper-refresh.lock /home/2023112374/mesugak/v2/run_paper_refresh_requests.sh >> /home/2023112374/mesugak/logs/paper_refresh_$(date +\%Y-\%m).log 2>&1
+```
+
+With that cron entry, a clicked refresh is normally processed within one minute.
+If it is outside the worker window, the button remains pending until the next
+worker run; no order is ever created by the request itself.
+
+### Administrator setup
+
+Firestore rules intentionally grant private account reads and refresh-request
+creation only when `admins/{Google-login-email}` exists. Create that document
+once in the Firebase Console with any non-sensitive field such as
+`enabled: true`. Do not use a user-editable `users/{uid}.role` field to grant
+this privilege.
+## 당일 재진입과 빠른 하락 보호
+
+- `MESUGAK_BLOCK_REENTRY_AFTER_EXIT=true`이면 `trailing_stop`, `profit_lock_trailing_stop`, 점수 청산 또는 회전 청산으로 **체결된 종목은 당일 재매수하지 않습니다**. 서버 재시작 뒤에도 `intraday_trade_state`에 잠금이 보존됩니다.
+- `MESUGAK_PROFIT_LOCK_ACTIVATE_PCT=0.03`: 매수 후 고점이 3% 이상일 때 이익보호를 활성화합니다.
+- `MESUGAK_PROFIT_LOCK_TRAILING_PCT=0.02`: 활성화 뒤 고점에서 2% 되밀리면 청산 후보가 됩니다.
+- `MESUGAK_PROFIT_LOCK_MIN_PNL_PCT=0.005`: 실제 청산 시점에도 최소 0.5% 이익이 남을 때만 이 규칙으로 청산합니다.
+- `MESUGAK_SAME_DAY_STOP_LOSS_PCT=0.03`: 당일 새로 매수한 종목의 실시간 호가가 평균 매수가보다 3% 이상 내려가면 전량 시장가 매도합니다. 이 사유로 매도된 종목은 당일 재진입하지 않습니다.
+
+모든 주문은 KIS 모의투자 시장가(`ORD_DVSN=01`, `ORD_UNPR=0`)로 전송됩니다. 현재 장중 루프는 단일 현재가만 보므로, 분봉 기반 볼린저 상단 재진입/중앙선 이탈 규칙은 별도 분봉 데이터 경로를 추가하기 전에는 적용하지 않습니다.

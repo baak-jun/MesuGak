@@ -234,3 +234,60 @@ def to_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "indicatorStates",
     ]
     return {key: payload.get(key) for key in keys}
+
+
+def to_public_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return a price-free explanation of an analysis result for public display.
+
+    This is deliberately not a redacted version of ``to_summary``: fields that
+    expose raw market data or the input values of an indicator are never copied
+    into the public payload in the first place.
+    """
+
+    indicator_states: dict[str, dict[str, Any]] = {}
+    for key, value in (payload.get("indicatorStates") or {}).items():
+        if not isinstance(value, dict):
+            continue
+        indicator_states[str(key)] = {
+            "state": value.get("state"),
+            "reasons": list(value.get("reasons") or []),
+        }
+
+    # Safely expose non-price numerical metrics for educational display
+    safe_metrics = {}
+    sort_metrics = payload.get("sortMetrics") or {}
+    if "bollinger" in sort_metrics:
+        safe_metrics["bollinger"] = {
+            "percentB": sort_metrics["bollinger"].get("percentB"),
+            "bandwidth": sort_metrics["bollinger"].get("bandwidth"),
+            "bandwidthRank": sort_metrics["bollinger"].get("bandwidthRank"),
+        }
+    if "rsi" in sort_metrics:
+        safe_metrics["rsi"] = {
+            "rsi": sort_metrics["rsi"].get("rsi"),
+        }
+    if "volume" in sort_metrics:
+        safe_metrics["volume"] = {
+            "relativeVolume": sort_metrics["volume"].get("relativeVolume"),
+        }
+
+    signal = payload.get("signal") or {}
+    return {
+        "id": payload.get("id"),
+        "code": payload.get("code"),
+        "name": payload.get("name"),
+        "market": payload.get("market"),
+        "strategyVersion": payload.get("strategyVersion"),
+        "analysisDate": payload.get("lastDate"),
+        "status": payload.get("status"),
+        "type": payload.get("type"),
+        "confidenceScore": payload.get("confidenceScore"),
+        "confidenceLabel": payload.get("confidenceLabel"),
+        "componentScores": payload.get("componentScores") or {},
+        "confidenceReasons": list(payload.get("confidenceReasons") or signal.get("reasons") or []),
+        "indicatorStates": indicator_states,
+        "sortMetrics": safe_metrics,
+        "riskState": payload.get("riskState"),
+        "riskFlags": list(payload.get("riskFlags") or []),
+        "signal": {"action": signal.get("action")},
+    }

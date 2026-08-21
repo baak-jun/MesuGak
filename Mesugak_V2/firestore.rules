@@ -5,60 +5,77 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function hasAdminRoleDoc() {
-      return isSignedIn() &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-
-    function isListedAdminEmail() {
+    // `users/{uid}` is user-writable for preferences, so it must never grant
+    // access to the private paper account. Admin access is console/server managed.
+    function isAdmin() {
       return isSignedIn() &&
         request.auth.token.email != null &&
         exists(/databases/$(database)/documents/admins/$(request.auth.token.email));
     }
 
-    function isAdmin() {
-      return hasAdminRoleDoc() || isListedAdminEmail();
-    }
-
     match /stock_analysis/{stockId} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow write: if false;
     }
 
     match /meta_data/{docId} {
-      allow read: if true;
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // The sanitized public feed stays closed until a documented data-rights
+    // review is completed and a deliberate rules deployment opens it.
+    match /public_analysis_meta/{docId} {
+      allow read: if isAdmin();
       allow write: if false;
     }
 
     match /strategy_runs/{docId} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow write: if false;
     }
 
     match /strategy_candidates/{docId} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow write: if false;
     }
 
     match /target_allocations/{docId} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow write: if false;
     }
 
     match /rebalance_orders/{docId} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow write: if false;
     }
 
     match /risk_state/{docId} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow write: if false;
     }
 
     match /paper_order_applications/{docId} {
       allow read: if isAdmin();
       allow write: if false;
+    }
+
+    match /intraday_trade_state/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /paper_refresh_requests/{requestId} {
+      // A browser can only enqueue its own request. The school server writes
+      // the completed/failed state with Admin SDK credentials.
+      allow create: if isAdmin() &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.market == 'KR' &&
+        request.resource.data.requestedByUid == request.auth.uid &&
+        request.resource.data.source == 'web' &&
+        request.resource.data.requestedAt == request.time;
+      allow read: if isAdmin();
+      allow update, delete: if false;
     }
 
     match /users/{userId} {
@@ -70,11 +87,19 @@ service cloud.firestore {
     }
 
     match /admins/{email} {
-      allow read: if isSignedIn();
+      allow get: if isSignedIn() && request.auth.token.email == email;
+      allow list: if false;
       allow write: if false;
     }
 
     match /bot_account_snapshot/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // KOSPI/KOSDAQ comparison is an operator-only research aid. The server
+    // writes a sanitized aggregate summary; no public or ordinary-user read.
+    match /paper_performance_private/{docId} {
       allow read: if isAdmin();
       allow write: if false;
     }

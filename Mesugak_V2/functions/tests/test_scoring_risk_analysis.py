@@ -10,7 +10,7 @@ FUNCTIONS_DIR = Path(__file__).resolve().parents[1]
 if str(FUNCTIONS_DIR) not in sys.path:
     sys.path.insert(0, str(FUNCTIONS_DIR))
 
-from strategy_engine.analysis import StockIdentity, analyze_stock, to_summary  # noqa: E402
+from strategy_engine.analysis import StockIdentity, analyze_stock, to_public_summary, to_summary  # noqa: E402
 from strategy_engine.risk import evaluate_risk  # noqa: E402
 from strategy_engine.scoring import classify_bollinger_state, classify_ma_support_state, score_latest, score_valuation  # noqa: E402
 
@@ -261,6 +261,14 @@ class ScoringRiskAnalysisTests(unittest.TestCase):
         self.assertIn("sortMetrics", summary)
         self.assertIn("bollinger", summary["sortMetrics"])
         self.assertIn("percentB", summary["sortMetrics"]["bollinger"])
+
+        public_summary = to_public_summary(payload)
+        self.assertEqual(public_summary["id"], payload["id"])
+        self.assertIn("confidenceReasons", public_summary)
+        self.assertIn("indicatorStates", public_summary)
+        self.assertEqual(set(public_summary["indicatorStates"]["bollinger"]), {"state", "reasons"})
+        for sensitive_key in ("history", "currentPrice", "volume", "marcap", "bandwidth", "percentB", "cashTargetPct", "stopLoss", "fundamentals"):
+            self.assertNotIn(sensitive_key, public_summary)
 
     def test_analyze_stock_rejects_short_history(self) -> None:
         payload = analyze_stock(

@@ -44,5 +44,13 @@
 
 - Increase `MESUGAK_MAX_STOCKS` gradually.
 - Watch Cloud Functions duration, memory, and failure logs.
-- Confirm frontend loads Firestore data and execution history.
+- Confirm frontend shows legal links and the no-live-data education screen by default. `public_analysis_meta` must remain administrator-only in deployed Firestore rules until the public data-rights gate is formally opened.
 - Add README CI badge after the workflow is observed passing on GitHub.
+
+## Compliance Gate
+
+- Review `Mesugak_V2\docs\DATA_COMPLIANCE.md` before public deployment, advertising, or paid access.
+- Keep `VITE_ENABLE_PUBLIC_LIVE_DATA=false`, `VITE_PUBLIC_DATA_RIGHTS_CONFIRMED=false`, and `VITE_ENABLE_ADSENSE=false` unless market-data display rights and the full commercial scope are confirmed in writing.
+- Before opening public data, retain the written approval reference, review the exact feeds/territories/delay conditions, set the explicit frontend gates, and deploy a reviewed Firestore-rules change in the same release.
+- Confirm the frontend legal links are visible: 개인정보처리방침, 이용약관, 면책고지, 데이터 사용 고지.
+- Do not enable real AdSense code until AdSense approval, `ads.txt`, privacy cookie disclosures, consent requirements, and data-display rights are all ready.

@@ -357,15 +357,22 @@ def score_latest(df: pd.DataFrame, fundamentals: dict[str, Any] | None = None) -
         "volume": _clamp(volume_score, -100.0, 100.0),
         "penalty": _clamp(penalty),
     }
-    confidence = (
-        component_scores["bollinger"] * SCORING_WEIGHTS["bollinger"]
-        + component_scores["maSupport"] * SCORING_WEIGHTS["maSupport"]
-        + component_scores["ichimoku"] * SCORING_WEIGHTS["ichimoku"]
-        + component_scores["rsi"] * SCORING_WEIGHTS["rsi"]
-        + component_scores["valuation"] * SCORING_WEIGHTS["valuation"]
-        + component_scores["volume"] * SCORING_WEIGHTS["volume"]
-        - component_scores["penalty"]
-    )
+
+    active_weights = {}
+    if ichimoku_state.get("state") != "NO_DATA": active_weights["ichimoku"] = SCORING_WEIGHTS["ichimoku"]
+    if ma_state.get("state") != "NO_DATA": active_weights["maSupport"] = SCORING_WEIGHTS["maSupport"]
+    if bollinger_state.get("state") != "NO_DATA": active_weights["bollinger"] = SCORING_WEIGHTS["bollinger"]
+    if rsi_state.get("state") != "NO_DATA": active_weights["rsi"] = SCORING_WEIGHTS["rsi"]
+    if volume_state.get("state") != "NO_DATA": active_weights["volume"] = SCORING_WEIGHTS["volume"]
+    if valuation_state.get("state") == "VALUED": active_weights["valuation"] = SCORING_WEIGHTS["valuation"]
+
+    total_weight = sum(active_weights.values())
+    confidence = 0.0
+    if total_weight > 0:
+        for key, weight in active_weights.items():
+            confidence += component_scores[key] * (weight / total_weight)
+    
+    confidence -= component_scores["penalty"]
     confidence = round(_clamp(confidence), 2)
 
     bollinger_name = str(bollinger_state.get("state", "UNKNOWN"))
@@ -384,9 +391,9 @@ def score_latest(df: pd.DataFrame, fundamentals: dict[str, Any] | None = None) -
         and component_scores["penalty"] < 15
     )
 
-    valuation_has_data = valuation_state.get("state") == "VALUED"
-    strong_threshold = 78.0 if valuation_has_data else 68.0
-    buy_threshold = 70.0 if valuation_has_data else 62.0
+    # Use unified thresholds now that scores are normalized
+    strong_threshold = 75.0
+    buy_threshold = 60.0
 
     if confidence >= strong_threshold and high_quality_setup:
         label = "STRONG_BUY"

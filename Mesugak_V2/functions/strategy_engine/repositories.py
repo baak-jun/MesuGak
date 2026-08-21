@@ -14,10 +14,28 @@ class StrategyRepository(Protocol):
     def save_meta_chunk(self, market: str, index: int, items: list[dict]) -> None:
         ...
 
+    def save_public_meta_chunk(self, market: str, index: int, items: list[dict]) -> None:
+        ...
+
+    def save_private_paper_performance(self, payload: dict) -> None:
+        ...
+
+    def fetch_intraday_trade_state(self, market: str, session_date: str) -> dict:
+        ...
+
+    def save_intraday_trade_state(self, market: str, session_date: str, payload: dict) -> None:
+        ...
+
     def save_target_allocation(self, allocation_id: str, payload: dict) -> None:
         ...
 
     def save_rebalance_order(self, order_id: str, payload: dict) -> None:
+        ...
+
+    def fetch_pending_paper_refresh_requests(self, limit: int = 5) -> list[dict]:
+        ...
+
+    def finish_paper_refresh_request(self, request_id: str, payload: dict) -> None:
         ...
 
 
@@ -94,6 +112,30 @@ class FirestoreStrategyRepository:
 
     def delete_meta_chunk(self, market: str, index: int) -> None:
         self.db.collection("meta_data").document(f"meta_v2_{market}_{index}").delete()
+
+    def save_public_meta_chunk(self, market: str, index: int, items: list[dict[str, Any]]) -> None:
+        self.db.collection("public_analysis_meta").document(f"public_meta_v2_{market}_{index}").set(
+            {
+                "market": market,
+                "strategyVersion": "V2_PUBLIC",
+                "list": items,
+                "updatedAt": self._server_timestamp(),
+            }
+        )
+
+    def delete_public_meta_chunk(self, market: str, index: int) -> None:
+        self.db.collection("public_analysis_meta").document(f"public_meta_v2_{market}_{index}").delete()
+
+    def fetch_intraday_trade_state(self, market: str, session_date: str) -> dict[str, Any]:
+        snapshot = self.db.collection("intraday_trade_state").document(f"{market}_{session_date}").get()
+        return snapshot.to_dict() if snapshot.exists else {}
+
+    def save_intraday_trade_state(self, market: str, session_date: str, payload: dict[str, Any]) -> None:
+        data = dict(payload)
+        data["market"] = market
+        data["sessionDate"] = session_date
+        data["updatedAt"] = self._server_timestamp()
+        self.db.collection("intraday_trade_state").document(f"{market}_{session_date}").set(data, merge=True)
 
     def save_strategy_run(self, run_id: str, payload: dict[str, Any]) -> None:
         data = dict(payload)
@@ -203,6 +245,35 @@ class FirestoreStrategyRepository:
         data = dict(payload)
         data["updatedAt"] = self._server_timestamp()
         self.db.collection(collection_name).document(doc_id).set(data, merge=True)
+
+    def save_private_paper_performance(self, payload: dict[str, Any]) -> None:
+        """Persist only the administrator-only aggregate benchmark comparison."""
+        data = dict(payload)
+        data["visibility"] = "admin_only"
+        data["updatedAt"] = self._server_timestamp()
+        self.db.collection("paper_performance_private").document("latest").set(data, merge=True)
+    def fetch_pending_paper_refresh_requests(self, limit: int = 5) -> list[dict[str, Any]]:
+        """Return web-requested KIS balance refreshes for the school server.
+
+        These documents are created by an authenticated administrator in the
+        frontend. Only the school server processes them; no browser receives
+        KIS credentials or calls the brokerage API directly.
+        """
+        from google.cloud.firestore_v1 import FieldFilter
+
+        safe_limit = max(1, min(int(limit or 5), 20))
+        query = (
+            self.db.collection("paper_refresh_requests")
+            .where(filter=FieldFilter("status", "==", "pending"))
+            .limit(safe_limit)
+        )
+        return [{"id": doc.id, **(doc.to_dict() or {})} for doc in query.stream()]
+
+    def finish_paper_refresh_request(self, request_id: str, payload: dict[str, Any]) -> None:
+        """Record only refresh status metadata, not credentials or tokens."""
+        data = dict(payload)
+        data["updatedAt"] = self._server_timestamp()
+        self.db.collection("paper_refresh_requests").document(request_id).set(data, merge=True)
 
     def save_paper_order_application(self, application_id: str, payload: dict[str, Any]) -> None:
         data = dict(payload)

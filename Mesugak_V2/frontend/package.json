@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "monetization:check": "node scripts/check-monetization-gate.mjs",
+    "ads:txt": "node scripts/write-ads-txt.mjs",
+    "prebuild": "npm run monetization:check",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"

@@ -12,9 +12,9 @@ FUNCTIONS_DIR = Path(__file__).resolve().parents[1]
 if str(FUNCTIONS_DIR) not in sys.path:
     sys.path.insert(0, str(FUNCTIONS_DIR))
 
-from strategy_engine.analysis import StockIdentity, analyze_stock, to_summary
+from strategy_engine.analysis import StockIdentity, analyze_stock, to_public_summary, to_summary
 from strategy_engine.checkpoints import LocalCheckpointManager, MemoryCheckpointManager, resolve_checkpoint_path
-from strategy_engine.market_data import load_kr_fundamentals_with_fdr, load_market_universe, load_ohlcv_with_fdr, targets_from_codes
+from strategy_engine.market_data import load_kr_fundamentals_with_kis, load_market_universe, load_ohlcv_with_kis, targets_from_codes
 from strategy_engine.repositories import FirestoreStrategyRepository, init_firestore
 
 
@@ -63,6 +63,18 @@ def _delete_stale_meta_chunks(repo: FirestoreStrategyRepository, market: str, st
     for index in range(start_index, max(start_index, previous_count)):
         repo.delete_meta_chunk(market, index)
 
+
+def _save_public_meta_chunks(repo: FirestoreStrategyRepository, market: str, summaries: list[dict], chunk_size: int) -> int:
+    chunk_count = 0
+    for index in range(0, len(summaries), chunk_size):
+        repo.save_public_meta_chunk(market, chunk_count, summaries[index : index + chunk_size])
+        chunk_count += 1
+    return chunk_count
+
+
+def _delete_stale_public_meta_chunks(repo: FirestoreStrategyRepository, market: str, start_index: int, previous_count: int) -> None:
+    for index in range(start_index, max(start_index, previous_count)):
+        repo.delete_public_meta_chunk(market, index)
 
 def _format_duration(seconds: float) -> str:
     seconds = max(0, int(seconds))
@@ -140,11 +152,11 @@ def run(args: argparse.Namespace) -> dict:
         for offset, target in enumerate(remaining_targets):
             remaining_count = len(remaining_targets) - offset - 1
             try:
-                df = load_ohlcv_with_fdr(target.code)
+                df = load_ohlcv_with_kis(target.code)
                 fundamentals = {}
                 if market == "KR":
                     try:
-                        fundamentals = load_kr_fundamentals_with_fdr(target.code)
+                        fundamentals = load_kr_fundamentals_with_kis(target.code)
                     except Exception as exc:
                         print(f"[fundamentals] {target.code} unavailable: {type(exc).__name__}: {exc}", flush=True)
                 payload = analyze_stock(
@@ -192,6 +204,10 @@ def run(args: argparse.Namespace) -> dict:
             print(f"[meta] writing {len(summaries)} summaries to meta_data chunks size={args.meta_chunk_size}", flush=True)
             meta_doc_count = _save_meta_chunks(repo, market, summaries, args.meta_chunk_size)
             _delete_stale_meta_chunks(repo, market, meta_doc_count, previous_meta_doc_count)
+            public_summaries = [to_public_summary(summary) for summary in summaries]
+            print(f"[public-meta] writing {len(public_summaries)} price-free summaries", flush=True)
+            public_meta_doc_count = _save_public_meta_chunks(repo, market, public_summaries, args.meta_chunk_size)
+            _delete_stale_public_meta_chunks(repo, market, public_meta_doc_count, previous_meta_doc_count)
             checkpoint.update_meta_doc_count(meta_doc_count)
             repo.save_strategy_run(
                 run_id,

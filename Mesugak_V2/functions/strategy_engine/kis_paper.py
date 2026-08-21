@@ -220,12 +220,20 @@ class KISPaperClient:
                 "pnlPct": round(pnl_pct, 4),
             })
 
-        cash = _first_number(summary, ("dnca_tot_amt", "nxdy_excc_amt", "prvs_rcdl_excc_amt", "cash", "cashAmt"))
+        # `dnca_tot_amt` is a settlement/deposit figure and can include cash
+        # that is not part of the portfolio's current net asset value. Use it
+        # only as a fallback; otherwise derive the displayed cash from the
+        # same total-equity basis as the holdings.
+        reported_cash = _first_number(summary, ("dnca_tot_amt", "nxdy_excc_amt", "prvs_rcdl_excc_amt", "cash", "cashAmt"))
         total_eval = _first_number(summary, ("scts_evlu_amt", "totalEvalAmt")) or sum(float(item["evalAmt"]) for item in holdings)
         total_buy = _first_number(summary, ("pchs_amt_smtl_amt", "totalBuyAmt")) or sum(float(item["buyAmt"]) for item in holdings)
-        total_equity = _first_number(summary, ("tot_evlu_amt", "nass_amt", "totalEquity")) or cash + total_eval
+        total_equity = _first_number(summary, ("tot_evlu_amt", "nass_amt", "totalEquity")) or reported_cash + total_eval
+        derived_cash = total_equity - total_eval
+        cash = derived_cash if total_equity > 0 and derived_cash >= 0 else reported_cash
         unrealized_pnl = _first_number(summary, ("evlu_pfls_smtl_amt", "unrealizedPnl")) or total_eval - total_buy
         initial = float(initial_cash or total_equity or cash or 0.0)
+        total_pnl = total_equity - initial
+        cash_and_realized_pnl = total_pnl - unrealized_pnl
         account = {
             "mode": "paper",
             "source": "KIS_PAPER",
@@ -236,9 +244,12 @@ class KISPaperClient:
             "totalEvalAmt": round(total_eval, 2),
             "totalBuyAmt": round(total_buy, 2),
             "totalEquity": round(total_equity, 2),
-            "realizedPnl": 0.0,
+            # The balance endpoint does not expose a separate lifetime realized
+            # P&L. This residual keeps account-level P&L consistent with the
+            # current holdings' unrealized P&L.
+            "realizedPnl": round(cash_and_realized_pnl, 2),
             "unrealizedPnl": round(unrealized_pnl, 2),
-            "totalPnl": round(unrealized_pnl, 2),
+            "totalPnl": round(total_pnl, 2),
             "returnPct": round(((total_equity - initial) / initial) * 100, 4) if initial > 0 else 0.0,
             "holdings": holdings,
         }

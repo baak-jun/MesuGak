@@ -113,3 +113,9 @@ Current frontend queries use simple `in` filters without explicit ordering:
 - `rebalance_orders`: `market in ["KR", "US"]`
 
 If the frontend later adds server-side ordering or pagination on these collections, add matching composite indexes before deployment.
+
+## Frontend Live-Data Safety Gate
+
+The production frontend defaults to a no-live-data education view. The deployed Firestore rule keeps `public_analysis_meta` administrator-only; a frontend environment value alone cannot expose it.
+
+Do not open public market-derived analysis or advertising until the written approval reference, exact public/commercial data-display scope, privacy/cookie requirements, and a reviewed Firestore-rules deployment have all been completed. `frontend/.env.example` documents the disabled-by-default gates.

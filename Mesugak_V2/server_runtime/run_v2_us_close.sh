@@ -42,6 +42,8 @@ PY
     args+=(--max-stocks "$MESUGAK_MAX_STOCKS")
   fi
   "$PYTHON_BIN" "$ROOT/functions/jobs/analyze_market.py" "${args[@]}"
+  "$PYTHON_BIN" "$ROOT/functions/jobs/publish_public_analysis.py" --market US
+  echo "[V2_US_CRON] public analysis feed published"
   date --iso-8601=date --date='TZ="America/New_York" now' > "$STAMP_FILE"
   echo "[V2_US_CRON] $(date '+%F %T %Z') end status=0"
 } >> "$LOG_DIR/v2_us_close.log" 2>&1

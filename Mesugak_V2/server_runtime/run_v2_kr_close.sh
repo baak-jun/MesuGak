@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 ROOT="${MESUGAK_V2_ROOT:-/home/2023112374/mesugak/v2}"
@@ -25,5 +25,9 @@ mkdir -p "$LOG_DIR"
     args+=(--max-stocks "$MESUGAK_MAX_STOCKS")
   fi
   "$PYTHON_BIN" "$ROOT/functions/jobs/analyze_market.py" "${args[@]}"
+  "$PYTHON_BIN" "$ROOT/functions/jobs/publish_public_analysis.py" --market KR
+  echo "[V2_KR_CRON] public analysis feed published"
+  "$PYTHON_BIN" "$ROOT/functions/jobs/publish_private_performance.py" --market KR
+  echo "[V2_KR_CRON] private paper-performance comparison processed"
   echo "[V2_KR_CRON] $(date '+%F %T %Z') end status=0"
 } >> "$LOG_DIR/v2_kr_close.log" 2>&1
