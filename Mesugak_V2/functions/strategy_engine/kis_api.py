@@ -117,6 +117,7 @@ class KisApiClient:
         
         # Filter exactly within the requested range
         df = df[(df["Date"] >= start_dt) & (df["Date"] <= end_dt)]
+        df = df.set_index("Date")
         return df
 
     def get_fundamentals(self, code: str) -> Dict[str, Any]:
