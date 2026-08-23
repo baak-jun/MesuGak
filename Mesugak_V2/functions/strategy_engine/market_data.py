@@ -97,8 +97,8 @@ def load_kr_benchmark_return(label: str, baseline_date: dt.date) -> dict[str, An
 def load_ohlcv_with_kis(code: str, lookback_days: int = 460) -> pd.DataFrame:
     """Load recent daily OHLCV data using KIS Open API."""
     from strategy_engine.kis_api import get_kis_client
-    end = datetime.now()
-    start = end - timedelta(days=lookback_days)
+    end = dt.datetime.now()
+    start = end - dt.timedelta(days=lookback_days)
     
     if not (os.environ.get("KIS_APP_KEY") or os.environ.get("KIS_REAL_APP_KEY") or os.environ.get("REAL_APP_KEY")):
         import FinanceDataReader as fdr
