@@ -10,10 +10,20 @@ logger = logging.getLogger(__name__)
 
 class KisApiClient:
     def __init__(self, app_key: str = None, app_secret: str = None, is_mock: bool = False):
-        self.app_key = app_key or os.environ.get("KIS_APP_KEY") or os.environ.get("KIS_REAL_APP_KEY") or os.environ.get("REAL_APP_KEY")
-        self.app_secret = app_secret or os.environ.get("KIS_APP_SECRET") or os.environ.get("KIS_REAL_APP_SECRET") or os.environ.get("REAL_APP_SECRET")
+        if app_key is None:
+            rk = os.environ.get("KIS_APP_KEY") or os.environ.get("KIS_REAL_APP_KEY") or os.environ.get("REAL_APP_KEY")
+            rs = os.environ.get("KIS_APP_SECRET") or os.environ.get("KIS_REAL_APP_SECRET") or os.environ.get("REAL_APP_SECRET")
+            pk = os.environ.get("KIS_PAPER_APP_KEY") or os.environ.get("KIS_MOCK_APP_KEY") or os.environ.get("MOCK_APP_KEY")
+            ps = os.environ.get("KIS_PAPER_APP_SECRET") or os.environ.get("KIS_MOCK_APP_SECRET") or os.environ.get("MOCK_APP_SECRET")
+            if rk and rs:
+                app_key, app_secret, is_mock = rk, rs, False
+            elif pk and ps:
+                app_key, app_secret, is_mock = pk, ps, True
+        self.app_key = app_key
+        self.app_secret = app_secret
         self.is_mock = is_mock
-        self.base_url = "https://openapivts.koreainvestment.com:29443" if is_mock else "https://openapi.koreainvestment.com:9443"
+        env_url = os.environ.get("KIS_PAPER_BASE_URL") if is_mock else None
+        self.base_url = env_url or ("https://openapivts.koreainvestment.com:29443" if is_mock else "https://openapi.koreainvestment.com:9443")
         self._access_token = None
         self._token_expires_at = 0
 

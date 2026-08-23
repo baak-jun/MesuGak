@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import datetime as dt
 from io import StringIO
 from dataclasses import dataclass
@@ -100,7 +101,7 @@ def load_ohlcv_with_kis(code: str, lookback_days: int = 460) -> pd.DataFrame:
     end = dt.datetime.now()
     start = end - dt.timedelta(days=lookback_days)
     
-    if not (os.environ.get("KIS_APP_KEY") or os.environ.get("KIS_REAL_APP_KEY") or os.environ.get("REAL_APP_KEY")):
+    if not any(os.environ.get(k) for k in ["KIS_APP_KEY", "KIS_REAL_APP_KEY", "REAL_APP_KEY", "KIS_PAPER_APP_KEY", "KIS_MOCK_APP_KEY", "MOCK_APP_KEY"]):
         import FinanceDataReader as fdr
         return normalize_ohlcv(fdr.DataReader(code, start, end))
         
@@ -110,7 +111,7 @@ def load_ohlcv_with_kis(code: str, lookback_days: int = 460) -> pd.DataFrame:
 
 def load_kr_fundamentals_with_kis(code: str) -> dict[str, Any]:
     """Load fundamentals using KIS Open API."""
-    if not (os.environ.get("KIS_APP_KEY") or os.environ.get("KIS_REAL_APP_KEY") or os.environ.get("REAL_APP_KEY")):
+    if not any(os.environ.get(k) for k in ["KIS_APP_KEY", "KIS_REAL_APP_KEY", "REAL_APP_KEY", "KIS_PAPER_APP_KEY", "KIS_MOCK_APP_KEY", "MOCK_APP_KEY"]):
         import FinanceDataReader as fdr
         frame = fdr.SnapDataReader(f"NAVER/FINSTATE/{str(code).strip()}")
         if frame is None or frame.empty:
