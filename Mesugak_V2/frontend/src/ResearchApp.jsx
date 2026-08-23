@@ -823,6 +823,7 @@ function TechnicalChart({ stock }) {
 }
 
 function ScoreDock({ stock }) {
+  const [helpKey, setHelpKey] = useState(null);
   const bollinger = stock.indicatorStates?.bollinger || stock.sortMetrics?.bollinger || {};
   const detailRows = [
     ['%B', numberAt(stock.sortMetrics, 'bollinger.percentB'), 2, componentMeta.bollinger.color],
@@ -852,8 +853,13 @@ function ScoreDock({ stock }) {
           {stock.components.length === 0 && <div className="empty-watch">세부 점수 데이터가 아직 없습니다.</div>}
           {stock.components.map((component) => (
             <div key={component.key} className="score-bar">
-              <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{ color: component.color }}>{component.label}</span>
+                  {educationalGuides[component.key] && (
+                    <button type="button" onClick={(e) => { e.stopPropagation(); setHelpKey(component.key); }} style={{background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text-muted)', display: 'flex', alignItems: 'center'}} title="패턴 기준 보기">
+                      <HelpCircle size={13} />
+                    </button>
+                  )}
                 <strong>{component.weight === -1 ? `감점 ${formatNumber(component.score, 1)}` : `${formatNumber(component.score, 1)} × ${formatNumber(Number(component.weight || 0) * 100, 0)}%`}</strong>
               </div>
               <meter min="0" max={component.max || 100} value={component.score || 0} style={{ '--meter-color': component.color }} />
@@ -873,9 +879,10 @@ function ScoreDock({ stock }) {
           {stock.risks.map((risk) => <div key={`${risk.label}-${risk.value}`} className={`risk-row risk-${risk.state}`}><span>{risk.label}</span><strong>{risk.value}</strong></div>)}
         </div>
       </section>
-    </aside>
-  );
-}
+    {helpKey && <EducationalGuideModal guideKey={helpKey} onClose={() => setHelpKey(null)} />}
+      </aside>
+    );
+  }
 
 const Candle = ({ x, o, c, h, l }) => {
   const isUp = c <= o; // Y axis is inverted, so smaller Y means higher price
@@ -1247,7 +1254,7 @@ function PublicAnalysisPanel({ stock }) {
                   <div style={{display: 'flex', alignItems: 'center', gap: '6px'}}>
                     <span>{publicIndicatorGuides[key]?.label || componentMeta[key]?.label || key}</span>
                     {educationalGuides[key] && (
-                      <button onClick={() => setHelpKey(key)} style={{background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text-muted)', display: 'flex', alignItems: 'center'}} title="패턴 기준 보기">
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setHelpKey(key); }} style={{background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text-muted)', display: 'flex', alignItems: 'center'}} title="패턴 기준 보기">
                         <HelpCircle size={14} />
                       </button>
                     )}
