@@ -191,7 +191,7 @@ export const legalPages = {
   },
 };
 
-const pageOrder = ['privacy', 'terms', 'disclaimer', 'data'];
+const pageOrder = ['terms', 'privacy'];
 
 export function normalizeLegalRoute(hash) {
   const value = String(hash || '').replace(/^#\/?/, '').replace(/^legal\//, '');

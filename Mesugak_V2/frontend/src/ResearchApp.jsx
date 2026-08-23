@@ -20,6 +20,7 @@ import {
 import { auth, db, firebaseReady, googleProvider } from './firebase';
 import { AdSenseSlot } from './AdSenseSlot';
 import { monetizationGate } from './monetizationGate';
+import { ComplianceDock } from './LegalPages.jsx';
 import { BRAND_FULL, BRAND_SHORT } from './brand';
 import './research.css';
 
@@ -227,6 +228,17 @@ const publicSortGroups = sortGroups
 const sortOptions = sortGroups.flatMap((group) => group.options);
 const sortOptionByKey = Object.fromEntries(sortOptions.map((option) => [option.key, option]));
 
+const themeOptions = [
+  { key: 'light', label: '라이트' },
+  { key: 'nightOwl', label: '나이트 아울' },
+  { key: 'beigeOwl', label: '베이지 아울' },
+];
+
+const themeClassMap = { light: 'theme-light', nightOwl: 'theme-night-owl', beigeOwl: 'theme-beige-owl' };
+
+
+
+
 const statusLabels = {
   STRONG_BUY: '강한 기술 조건',
   BUY_CANDIDATE: '관심 조건 충족',
@@ -253,13 +265,7 @@ const reasonLabels = {
   live_rebalance: '실시간 조건 재점검',
 };
 
-const themeOptions = [
-  { key: 'light', label: '라이트' },
-  { key: 'nightOwl', label: '나이트 아울' },
-  { key: 'beigeOwl', label: '베이지 아울' }
-];
 
-const themeClassMap = { light: 'theme-light', nightOwl: 'theme-night-owl', beigeOwl: 'theme-beige-owl' };
 // Public research and advertising are fail-closed. The same gate runs before build.
 const { publicLiveDataApproved, adsensePlacementApproved } = monetizationGate(import.meta.env);
 
@@ -1806,6 +1812,7 @@ export default function ResearchApp() {
 
       </section>
       {showDisclaimerModal && <DisclaimerModal onClose={() => setShowDisclaimerModal(false)} />}
+    {!user && <ComplianceDock />}
     </main>
   );
 }

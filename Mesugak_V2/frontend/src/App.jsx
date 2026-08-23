@@ -51,7 +51,7 @@ export default function App() {
     <AppErrorBoundary>
       {legalRoute ? <LegalPage pageKey={legalRoute} /> : <>
         <ResearchApp />
-        <ComplianceDock />
+        
       </>}
     </AppErrorBoundary>
   );
