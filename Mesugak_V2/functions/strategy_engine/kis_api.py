@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 
 class KisApiClient:
     def __init__(self, app_key: str = None, app_secret: str = None, is_mock: bool = False):
-        self.app_key = app_key or os.environ.get("KIS_APP_KEY")
-        self.app_secret = app_secret or os.environ.get("KIS_APP_SECRET")
+        self.app_key = app_key or os.environ.get("KIS_APP_KEY") or os.environ.get("KIS_REAL_APP_KEY") or os.environ.get("REAL_APP_KEY")
+        self.app_secret = app_secret or os.environ.get("KIS_APP_SECRET") or os.environ.get("KIS_REAL_APP_SECRET") or os.environ.get("REAL_APP_SECRET")
         self.is_mock = is_mock
         self.base_url = "https://openapivts.koreainvestment.com:29443" if is_mock else "https://openapi.koreainvestment.com:9443"
         self._access_token = None

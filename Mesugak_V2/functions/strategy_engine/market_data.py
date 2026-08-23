@@ -100,7 +100,7 @@ def load_ohlcv_with_kis(code: str, lookback_days: int = 460) -> pd.DataFrame:
     end = datetime.now()
     start = end - timedelta(days=lookback_days)
     
-    if not os.environ.get("KIS_APP_KEY"):
+    if not (os.environ.get("KIS_APP_KEY") or os.environ.get("KIS_REAL_APP_KEY") or os.environ.get("REAL_APP_KEY")):
         import FinanceDataReader as fdr
         return normalize_ohlcv(fdr.DataReader(code, start, end))
         
@@ -110,7 +110,7 @@ def load_ohlcv_with_kis(code: str, lookback_days: int = 460) -> pd.DataFrame:
 
 def load_kr_fundamentals_with_kis(code: str) -> dict[str, Any]:
     """Load fundamentals using KIS Open API."""
-    if not os.environ.get("KIS_APP_KEY"):
+    if not (os.environ.get("KIS_APP_KEY") or os.environ.get("KIS_REAL_APP_KEY") or os.environ.get("REAL_APP_KEY")):
         import FinanceDataReader as fdr
         frame = fdr.SnapDataReader(f"NAVER/FINSTATE/{str(code).strip()}")
         if frame is None or frame.empty:
