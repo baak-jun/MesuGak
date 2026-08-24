@@ -362,6 +362,55 @@ function publicReasonLabel(value) {
   return publicReasonLabels[key] || analysisReasonLabel(key);
 }
 
+const reasonExplanations = {
+  ichimoku_price_above_cloud: '주가가 일목균형표의 구름대(저항대) 위에 위치하고 있습니다. 구름대는 강력한 지지선 역할을 하며, 주가가 구름대 위에 있다는 것은 중장기적인 상승 추세에 있음을 의미합니다.',
+  ichimoku_price_below_cloud: '주가가 구름대 아래에 위치하여 저항을 받고 있는 상태입니다. 섣부른 매수보다 확실한 돌파를 확인하는 것이 좋습니다.',
+  ichimoku_tenkan_above_kijun: '단기 추세선인 전환선이 중장기 추세선인 기준선 위에 위치해 있습니다. 이는 단기적으로 상승 모멘텀이 강하다는 긍정적인 신호(골든크로스)입니다.',
+  ichimoku_tenkan_below_kijun: '단기 추세선인 전환선이 기준선 아래로 내려왔습니다(데드크로스). 단기적인 하락 압력이 커지고 있음을 주의해야 합니다.',
+  ichimoku_forward_cloud_bullish: '미래의 주가 흐름을 예측하는 선행 스팬이 양운(상승 구름)을 형성하고 있습니다. 이는 향후 주가를 받쳐줄 지지 기반이 탄탄하다는 것을 시사합니다.',
+  ichimoku_forward_cloud_bearish: '선행 스팬이 음운(하락 구름)을 띠고 있습니다. 향후 두터운 저항대가 기다리고 있어 주가가 곧바로 상승하기 어려울 수 있습니다.',
+  ichimoku_chikou_confirmed: '현재 주가를 과거로 미뤄 그린 후행스팬이 과거의 주가보다 높게 위치하고 있습니다. 이는 현재의 상승 추세가 신뢰할 만하다는 중요한 확인(컨펌) 신호입니다.',
+  bollinger_state_squeeze_release_up: '변동성이 좁게 수축(Squeeze)되었다가 위쪽 방향으로 밴드가 넓어지며 주가가 상단을 돌파하고 있습니다. 매우 강력한 상승 추세의 시작일 가능성이 높습니다.',
+  bollinger_state_squeeze: '볼린저 밴드의 폭이 좁아지며 에너지가 응축되는 단계입니다. 조만간 위든 아래든 큰 변동성이 나타날 수 있으므로 방향이 정해질 때까지 주시해야 합니다.',
+  bollinger_state_upper_band_release: '주가가 볼린저 밴드 상단을 돌파하거나 타면서 상승하고 있습니다. 매수세가 아주 강한 상태를 나타냅니다.',
+  bollinger_state_below_lower_band: '주가가 밴드 하단을 깨고 내려갔습니다. 강한 하락 추세가 진행 중이므로 반등을 기대한 매수에 신중해야 합니다.',
+  ma_support_lower_band_above_ma60: '밴드 하단이 장기 추세선인 60일 이동평균선보다 위에 있습니다. 가격이 떨어지더라도 여러 겹의 지지를 받을 수 있는 안정적인 상태입니다.',
+  ma_support_lower_band_cross_above_ma60: '밴드 하단이 60일 선을 위로 돌파하며 추세가 호전되고 있습니다. 중장기적인 추세가 하락에서 상승으로 돌아설 때 나타나는 신호입니다.',
+  rsi_crossed_above_50_with_signal: 'RSI(상대강도지수)가 50 기준선을 넘어섰으며, 시그널 선도 함께 돌파했습니다. 시장의 힘이 매도 우위에서 매수 우위로 완전히 넘어왔음을 의미합니다.',
+  rsi_oversold_recovery: 'RSI가 과매도(보통 30 이하) 구간까지 하락했다가 다시 반등하는 모습입니다. 단기적인 낙폭 과대로 인해 저가 매수세가 유입되고 있음을 시사합니다.',
+  rsi_breakdown: 'RSI가 하락하며 매수 동력이 크게 약화되었습니다. 단기적으로 하락세가 짙어질 가능성이 높으므로 방어가 필요합니다.',
+  price_breakout_with_relative_volume: '주가가 중요한 가격대를 돌파할 때 거래량이 평소보다 크게 증가했습니다. 이는 단순한 속임수가 아니라 의미 있는 자금이 유입된 긍정적인 돌파로 해석됩니다.',
+  squeeze_release_lacks_volume: '가격은 밴드 상단을 뚫었으나 거래량이 평소 수준에 그치고 있습니다. 상승 동력이 오래가지 못하고 다시 밴드 안으로 들어올 위험(속임수)이 있습니다.',
+  downside_band_expansion: '볼린저 밴드 폭이 넓어지는 동시에 주가가 하단으로 향하고 있습니다. 하락 방향으로 추세가 강하게 터지는 매우 위험한 구간입니다.',
+  failed_box_breakout: '박스권 상단을 돌파하는 듯 했으나 이내 밀려 내려왔습니다. 매물대 저항이 강하여 돌파에 실패한 실망 매물이 나올 수 있습니다.',
+  low_per: '주가수익비율(PER)이 낮다는 것은 회사가 벌어들이는 이익에 비해 주가가 싼 편이라는 뜻입니다. 가치투자 관점에서 긍정적인 베이스 조건이 됩니다.',
+  reasonable_per: 'PER이 과열되지 않고 적정한 수준에 머물러 있어, 현재의 주가가 실적에 의해 어느 정도 정당화될 수 있음을 의미합니다.',
+  low_pbr: '주가순자산비율(PBR)이 낮아 회사의 자산(청산가치) 대비 주가가 싸게 거래되고 있음을 의미합니다. 주가가 떨어지더라도 하방을 지지해주는 방어력이 좋습니다.',
+  operating_profit_growing: '회사의 영업이익이 꾸준히 성장하고 있습니다. 기업의 본질적인 이익 창출 능력이 좋아지고 있으므로 장기적인 주가 상승의 근본적인 원동력이 됩니다.',
+  chikou_below_past_price: '후행스팬이 과거 주가 아래에 머물러 있습니다. 상승 추세가 아직 불완전하거나 여전히 강한 매도 압력이 남아있음을 의미합니다.',
+};
+
+function getReasonExplanation(value) {
+  const key = String(value || '').toLowerCase();
+  const normalizedKey = normalizedReasonKey(key);
+  
+  // Try exact match
+  if (reasonExplanations[key]) return reasonExplanations[key];
+  if (reasonExplanations[normalizedKey]) return reasonExplanations[normalizedKey];
+  
+  // Try matching prefixes or postfixes for generic fallbacks
+  if (key.includes('squeeze') && key.includes('release')) return reasonExplanations.bollinger_state_squeeze_release_up;
+  if (key.includes('squeeze')) return reasonExplanations.bollinger_state_squeeze;
+  if (key.includes('volume') && key.includes('breakout')) return reasonExplanations.price_breakout_with_relative_volume;
+  if (key.includes('per') && key.includes('low')) return reasonExplanations.low_per;
+  if (key.includes('pbr') && key.includes('low')) return reasonExplanations.low_pbr;
+  if (key.includes('cloud') && key.includes('above')) return reasonExplanations.ichimoku_price_above_cloud;
+  if (key.includes('cloud') && key.includes('bearish')) return reasonExplanations.ichimoku_forward_cloud_bearish;
+  
+  return '이 조건은 다수의 기술적 분석 지표가 가리키는 현재의 시장 상황을 요약한 것입니다. 여러 근거가 겹칠수록 해당 추세의 신뢰도가 높아집니다.';
+}
+
+
 function publicStateLabel(state) {
   const normalized = String(state || 'NEUTRAL').toUpperCase();
   const labels = {
@@ -1185,12 +1234,37 @@ function EducationalGuideModal({ guideKey, onClose }) {
   );
 }
 
+function ReasonExplanationModal({ reasonKey, onClose }) {
+  const label = publicReasonLabel(reasonKey);
+  const explanation = getReasonExplanation(reasonKey);
+  
+  return (
+    <div className="modal-backdrop" onClick={onClose} style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+      <div className="modal-content" onClick={e => e.stopPropagation()} style={{background: 'var(--panel-bg, #ffffff)', padding: '28px', borderRadius: '16px', maxWidth: '480px', width: '90%', boxShadow: '0 10px 25px rgba(0,0,0,0.1)'}}>
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px'}}>
+          <h3 style={{margin: 0, fontSize: '17px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '8px'}}>
+            <HelpCircle size={18} color="var(--accent, #3b82f6)" />
+            조건 상세 설명
+          </h3>
+          <button type="button" onClick={onClose} style={{background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex'}}><X size={20} /></button>
+        </div>
+        <div style={{background: 'var(--surface-sunken, #f8fafc)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border)', marginBottom: '16px'}}>
+          <strong style={{display: 'block', fontSize: '15px', marginBottom: '12px', color: 'var(--text)'}}>{label}</strong>
+          <p style={{margin: 0, fontSize: '14px', color: 'var(--text-soft)', lineHeight: '1.6'}}>{explanation}</p>
+        </div>
+        <button type="button" onClick={onClose} className="auth-button" style={{width: '100%', justifyContent: 'center'}}>확인</button>
+      </div>
+    </div>
+  );
+}
+
 function PublicAnalysisUnavailable({ message }) {
   return (<section className="public-analysis-panel public-analysis-unavailable"><p>PUBLIC ANALYSIS FEED</p><h3>공개 분석 결과를 준비 중입니다.</h3><span>{message || '서버에서 가격 없는 분석 결과가 발행되면 이곳에 지표별 해석이 표시됩니다.'}</span></section>);
 }
 
 function PublicAnalysisPanel({ stock }) {
   const [helpKey, setHelpKey] = useState(null);
+  const [reasonKey, setReasonKey] = useState(null);
   const reasons = Array.from(new Set([...(stock.raw?.confidenceReasons || stock.raw?.signal?.reasons || []), ...Object.values(stock.indicatorStates || {}).flatMap((state) => state?.reasons || [])].filter(Boolean))).slice(0, 16);
   const states = Object.entries(stock.indicatorStates || {}).filter(([, state]) => state?.state || (state?.reasons || []).length);
   const components = stock.components.filter((component) => component.key !== 'penalty');
@@ -1235,8 +1309,8 @@ function PublicAnalysisPanel({ stock }) {
       <section id={sectionId('evidence')} className="public-analysis-section public-evidence-section">
         <div className="public-section-heading"><span>03 · 반영한 조건</span><h4>긍정 조건과 주의 조건을 나눠 확인하세요</h4><p>같은 종목 안에서도 상승 쪽 근거와 주의할 근거가 함께 존재할 수 있습니다.</p></div>
         <div className="public-evidence-columns">
-          <article className="public-evidence-card supportive"><header><strong>해석을 뒷받침한 조건</strong><span>{supportingReasons.length}개</span></header><div>{supportingReasons.length ? supportingReasons.map((reason) => <span key={reason}>{publicReasonLabel(reason)}</span>) : <small>현재 공개된 뒷받침 조건이 없습니다.</small>}</div></article>
-          <article className="public-evidence-card caution"><header><strong>함께 확인할 조건</strong><span>{cautionReasons.length}개</span></header><div>{cautionReasons.length ? cautionReasons.map((reason) => <span key={reason}>{publicReasonLabel(reason)}</span>) : <small>현재 뚜렷한 경고 조건이 없습니다.</small>}</div></article>
+          <article className="public-evidence-card supportive"><header><strong>해석을 뒷받침한 조건</strong><span>{supportingReasons.length}개</span></header><div>{supportingReasons.length ? supportingReasons.map((reason) => <span key={reason} onClick={() => setReasonKey(reason)} style={{cursor: 'pointer'}} title="클릭하여 설명 보기" className="clickable-reason">{publicReasonLabel(reason)} <HelpCircle size={11} style={{display:'inline', marginLeft:'2px', opacity:0.6}}/></span>) : <small>현재 공개된 뒷받침 조건이 없습니다.</small>}</div></article>
+          <article className="public-evidence-card caution"><header><strong>함께 확인할 조건</strong><span>{cautionReasons.length}개</span></header><div>{cautionReasons.length ? cautionReasons.map((reason) => <span key={reason} onClick={() => setReasonKey(reason)} style={{cursor: 'pointer'}} title="클릭하여 설명 보기" className="clickable-reason">{publicReasonLabel(reason)} <HelpCircle size={11} style={{display:'inline', marginLeft:'2px', opacity:0.6}}/></span>) : <small>현재 뚜렷한 경고 조건이 없습니다.</small>}</div></article>
         </div>
         {stock.raw?.riskFlags?.length > 0 && <div className="public-risk-note"><Shield size={16} /><span><strong>추가 주의 신호:</strong> {stock.raw.riskFlags.map(publicReasonLabel).join(' · ')}</span></div>}
       </section>
@@ -1285,6 +1359,7 @@ function PublicAnalysisPanel({ stock }) {
         }) : <div className="public-empty-detail">현재 종목의 지표별 해설을 준비 중입니다.</div>}
       </section>
       {helpKey && <EducationalGuideModal guideKey={helpKey} onClose={() => setHelpKey(null)} />}
+      {reasonKey && <ReasonExplanationModal reasonKey={reasonKey} onClose={() => setReasonKey(null)} />}
     </section>
   );
 }
