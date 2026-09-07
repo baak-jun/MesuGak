@@ -442,11 +442,31 @@ function sortValue(signal, mode) {
   return null;
 }
 
+const publicDocumentRequests = new Map();
+async function readPublicDocument(id) {
+  const key = `mesugak-public-v1:${id}`;
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(key) || 'null');
+    if (cached && Date.now() - cached.savedAt < 15 * 60_000) return cached.data;
+  } catch { /* Storage may be unavailable in private browsing. */ }
+  if (publicDocumentRequests.has(id)) return publicDocumentRequests.get(id);
+  const request = getDoc(doc(db, 'public_analysis_meta', id)).then((snapshot) => {
+    const data = snapshot.exists() ? snapshot.data() : null;
+    if (data) {
+      try { sessionStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), data })); }
+      catch { /* The page remains usable when browser storage is full. */ }
+    }
+    return data;
+  }).finally(() => publicDocumentRequests.delete(id));
+  publicDocumentRequests.set(id, request);
+  return request;
+}
+
 async function loadSignalsFromFirestore({ admin = false } = {}) {
   if (!firebaseReady || !db) return { signals: [], manifests: {}, loadedPages: [] };
   if (!admin && !publicLiveDataApproved) return { signals: [], manifests: {}, loadedPages: [] };
   if (admin) {
-    const metaQuery = query(collection(db, 'meta_data'), where('market', '==', 'KR'));
+    const metaQuery = query(collection(db, 'meta_data'), where('market', '==', 'KR'), limit(30));
     const metaSnap = await getDocs(metaQuery);
     let rows = [];
     metaSnap.forEach((item) => {
@@ -458,10 +478,10 @@ async function loadSignalsFromFirestore({ admin = false } = {}) {
   }
 
   const markets = ['KR'];
-  const manifestSnapshots = await Promise.all(markets.map((market) => getDoc(doc(db, 'public_analysis_meta', `public_meta_v2_${market}_manifest`))));
+  const manifestSnapshots = await Promise.all(markets.map((market) => readPublicDocument(`public_meta_v2_${market}_manifest`)));
   const manifests = {};
   manifestSnapshots.forEach((snapshot, index) => {
-    if (snapshot.exists() && snapshot.data()?.strategyVersion === 'V2_PUBLIC_MANIFEST') manifests[markets[index]] = snapshot.data();
+    if (snapshot?.strategyVersion === 'V2_PUBLIC_MANIFEST') manifests[markets[index]] = snapshot;
   });
   const pageKeys = Object.keys(manifests).map((market) => `${market}:0`);
   return {
@@ -477,11 +497,11 @@ async function loadPublicPageKeys(pageKeys) {
   if (!firebaseReady || !db || !publicLiveDataApproved || pageKeys.length === 0) return [];
   const snapshots = await Promise.all(pageKeys.map((key) => {
     const [market, page] = key.split(':');
-    return getDoc(doc(db, 'public_analysis_meta', `public_meta_v2_${market}_${page}`));
+    return readPublicDocument(`public_meta_v2_${market}_${page}`);
   }));
   const rows = [];
   snapshots.forEach((snapshot) => {
-    const data = snapshot.exists() ? snapshot.data() : null;
+    const data = snapshot;
     if (data?.strategyVersion === 'V2_PUBLIC' && Array.isArray(data.list)) rows.push(...data.list);
   });
   return rows.map(mapStockPayload);
@@ -550,7 +570,7 @@ function mapPortfolioPosition(payload, fallbackCode = '') {
 async function loadPortfolioFromFirestore() {
   if (!firebaseReady || !db) return null;
   const snapshotSnap = await getDoc(doc(db, 'bot_account_snapshot', 'latest'));
-  const portfolioSnap = await getDocs(collection(db, 'bot_portfolio'));
+  const portfolioSnap = await getDocs(query(collection(db, 'bot_portfolio'), limit(200)));
   const positions = [];
   portfolioSnap.forEach((item) => positions.push(mapPortfolioPosition({ id: item.id, ...item.data() }, item.id)));
   if (!snapshotSnap.exists() && positions.length === 0) return null;

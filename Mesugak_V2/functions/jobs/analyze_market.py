@@ -155,6 +155,10 @@ def run(args: argparse.Namespace) -> dict:
     if market != "KR":
         raise ValueError("Financial Services Commission public analysis supports KR only")
     targets = _load_targets(args, market)
+    if len(targets) > 3000:
+        raise ValueError('Daily analysis is limited to 3000 stocks; review the write budget before expanding')
+    if not 1 <= getattr(args, 'history_limit', 130) <= 130:
+        raise ValueError('Stored chart history must be between 1 and 130 trading days')
     run_id = f"{market}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     repo = None if args.dry_run else FirestoreStrategyRepository(init_firestore(args.cred_path))
     checkpoint = (

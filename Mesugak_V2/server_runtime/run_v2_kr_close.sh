@@ -28,11 +28,14 @@ fi
 cd "$ROOT"
 PYTHON_BIN="${MESUGAK_PYTHON_BIN:-$ROOT/venv/bin/python}"
 mkdir -p "$LOG_DIR"
+exec 9>"$ROOT/runtime/analysis.lock"
+flock -n 9 || exit 0
 
 set +e
 (
   set -e
   echo "[V2_KR_CRON] $(date '+%F %T %Z') start"
+  "$PYTHON_BIN" "$ROOT/functions/jobs/check_cloud_budget.py" --kind analysis
   args=(
     --market KR
     --kr-markets "${MESUGAK_KR_MARKETS:-KOSPI,KOSDAQ}"

@@ -25,4 +25,5 @@ if [[ ! -x "$PYTHON_BIN" ]]; then
   PYTHON_BIN="${MESUGAK_PYTHON_BIN:-python3}"
 fi
 
+"$PYTHON_BIN" "$ROOT/functions/jobs/check_cloud_budget.py" --kind refresh
 exec "$PYTHON_BIN" "$ROOT/functions/jobs/school_paper_trader.py" --process-refresh-requests --market "${MESUGAK_MARKET:-KR}"

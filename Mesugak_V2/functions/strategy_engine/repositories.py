@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol
+from .storage_policy import compact_analysis, archive_latest_analysis
 
 
 class StrategyRepository(Protocol):
@@ -111,7 +112,8 @@ class FirestoreStrategyRepository:
         return datetime.now().strftime("%Y-%m-%d")
 
     def save_stock_analysis(self, doc_id: str, payload: dict[str, Any]) -> None:
-        data = dict(payload)
+        archive_latest_analysis(doc_id, payload)
+        data = compact_analysis(payload)
         data["updatedAt"] = self._server_timestamp()
         self.db.collection("stock_analysis").document(doc_id).set(data)
 
@@ -121,7 +123,8 @@ class FirestoreStrategyRepository:
         batch = self.db.batch()
         server_ts = self._server_timestamp()
         for doc_id, payload in items:
-            data = dict(payload)
+            archive_latest_analysis(doc_id, payload)
+            data = compact_analysis(payload)
             data["updatedAt"] = server_ts
             batch.set(self.db.collection("stock_analysis").document(doc_id), data)
         batch.commit()
@@ -278,9 +281,7 @@ class FirestoreStrategyRepository:
         self.db.collection("strategy_runs").document(run_id).set(data, merge=True)
 
     def save_strategy_candidate(self, candidate_id: str, payload: dict[str, Any]) -> None:
-        data = dict(payload)
-        data["updatedAt"] = self._server_timestamp()
-        self.db.collection("strategy_candidates").document(candidate_id).set(data)
+        raise RuntimeError('Historical candidate snapshots are disabled; use local archives')
 
     def save_target_allocation(self, allocation_id: str, payload: dict[str, Any]) -> None:
         data = dict(payload)
@@ -555,4 +556,3 @@ class FirestoreStrategyRepository:
         except Exception as exc:
             print(f"[cleanup] strategy_candidates cleanup skipped: {exc}", flush=True)
         return deleted
-
