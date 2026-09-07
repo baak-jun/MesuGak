@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="${MESUGAK_V2_ROOT:-/home/2023112374/mesugak/v2}"
-LOG_DIR="$ROOT/runtime/cron"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_ROOT="$SCRIPT_DIR"
+if [[ ! -f "$DEFAULT_ROOT/functions/jobs/analyze_market.py" ]]; then
+  DEFAULT_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+fi
+ROOT="${MESUGAK_V2_ROOT:-$DEFAULT_ROOT}"
 ENV_FILE="$ROOT/.env.server"
 
 if [[ -f "$ENV_FILE" ]]; then
@@ -10,12 +14,18 @@ if [[ -f "$ENV_FILE" ]]; then
   source "$ENV_FILE"
   set +a
 fi
+ROOT="${MESUGAK_V2_ROOT:-$ROOT}"
+LOG_DIR="$ROOT/runtime/cron"
 FUNCTIONS_ENV_FILE="${MESUGAK_ENV_FILE:-$ROOT/functions/.env}"
+if [[ "$FUNCTIONS_ENV_FILE" != /* ]]; then
+  FUNCTIONS_ENV_FILE="$ROOT/$FUNCTIONS_ENV_FILE"
+fi
 if [[ -f "$FUNCTIONS_ENV_FILE" ]]; then
   set -a
   source "$FUNCTIONS_ENV_FILE"
   set +a
 fi
+cd "$ROOT"
 PYTHON_BIN="${MESUGAK_PYTHON_BIN:-$ROOT/venv/bin/python}"
 mkdir -p "$LOG_DIR"
 

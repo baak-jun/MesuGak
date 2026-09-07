@@ -860,6 +860,16 @@ meter::-webkit-meter-optimum-value {
   font-weight: 750;
 }
 
+.topbar-disclaimer {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .reason-lesson-graphic-canvas {
   min-height: 120px;
   border-radius: 8px;

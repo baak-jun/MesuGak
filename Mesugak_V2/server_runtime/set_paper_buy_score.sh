@@ -5,7 +5,15 @@ set -euo pipefail
 # Updates only the entry threshold used for future paper-trading BUY orders.
 
 SCORE="${1:-}"
-ENV_FILE="${2:-${MESUGAK_ENV_FILE:-/home/2023112374/mesugak/v2/functions/.env}}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_ROOT="$SCRIPT_DIR"
+if [[ ! -f "$DEFAULT_ROOT/functions/jobs/school_paper_trader.py" ]]; then
+  DEFAULT_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+fi
+ENV_FILE="${2:-${MESUGAK_ENV_FILE:-$DEFAULT_ROOT/functions/.env}}"
+if [[ "$ENV_FILE" != /* ]]; then
+  ENV_FILE="$DEFAULT_ROOT/$ENV_FILE"
+fi
 
 if [[ ! "$SCORE" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
   echo "Usage: $0 <score 0-100> [env-file]" >&2

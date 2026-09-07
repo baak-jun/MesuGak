@@ -11,6 +11,7 @@ runtime/
 .env
 .env.*
 !.env.example
+!.env.server.example
 serviceAccountKey.json
 
 # Python

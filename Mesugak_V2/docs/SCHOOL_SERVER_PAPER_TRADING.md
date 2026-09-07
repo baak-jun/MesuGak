@@ -98,11 +98,11 @@ Install the managed worker and process waiting requests once per minute while
 the site is normally used (server timezone: Asia/Seoul):
 
 ```bash
-chmod 755 ~/mesugak/v2/run_paper_refresh_requests.sh
+chmod 755 ~/mesugak/repo/Mesugak_V2/server_runtime/run_paper_refresh_requests.sh
 ```
 
 ```cron
-* 8-18 * * * /usr/bin/flock -n /tmp/mesugak-paper-refresh.lock /home/2023112374/mesugak/v2/run_paper_refresh_requests.sh >> /home/2023112374/mesugak/logs/paper_refresh_$(date +\%Y-\%m).log 2>&1
+* 8-18 * * 1-5 /usr/bin/flock -n /tmp/mesugak-paper-refresh.lock /home/USER/mesugak/repo/Mesugak_V2/server_runtime/run_paper_refresh_requests.sh >> /home/USER/mesugak/logs/paper_refresh_$(date +\%Y-\%m).log 2>&1
 ```
 
 With that cron entry, a clicked refresh is normally processed within one minute.

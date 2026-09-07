@@ -10,14 +10,16 @@ After a successful analysis they also run `publish_public_analysis.py`, which
 writes the price-free `public_analysis_meta` feed. The deployed Firestore rule
 allows only the explicitly named public feed documents, while the frontend
 gate remains disabled until written data-rights review.
-Deploy the whole `Mesugak_V2/functions/` directory and the KR/health runner scripts to
-the path set by `MESUGAK_V2_ROOT`, then create `.env.server` from
-`.env.server.example`.
+Keep the checked-out `Mesugak_V2/` directory intact on the server. The runner
+scripts resolve their V2 root from their own location, so a normal Git update
+does not require copying individual files. Create the ignored `.env.server`
+from `.env.server.example` and keep the protected `functions/.env` beside the
+checkout.
 
 For the managed school-server layout, use:
 
 ```cron
-10 16 * * 1-5 /home/2023112374/mesugak/v2/run_v2_kr_close.sh
+10 16 * * 1-5 /usr/bin/flock -n /tmp/mesugak-v2-kr.lock /home/USER/mesugak/repo/Mesugak_V2/server_runtime/run_v2_kr_close.sh
 ```
 
 The US wrapper is not part of the current public-data deployment. Remove any
@@ -25,9 +27,9 @@ old US cron entry before enabling this schedule.
 
 Never commit the actual `.env.server` file or service-account JSON.
 
-The wrappers do not run `source venv/bin/activate`; they invoke
-`$MESUGAK_V2_ROOT/venv/bin/python` explicitly. Verify the installed root-level
-wrapper because that is the path used by cron.
+The wrappers do not run `source venv/bin/activate`; they invoke the interpreter
+from `MESUGAK_PYTHON_BIN`. Set that path in `.env.server` and keep it outside
+the Git checkout when possible.
 
 ## On-demand paper-account refresh
 
@@ -40,7 +42,7 @@ Deploy it alongside the V2 functions directory, then add this cron line on the
 school server (KST):
 
 ```cron
-* 8-18 * * * /usr/bin/flock -n /tmp/mesugak-paper-refresh.lock /home/2023112374/mesugak/v2/run_paper_refresh_requests.sh >> /home/2023112374/mesugak/logs/paper_refresh_$(date +\%Y-\%m).log 2>&1
+* 8-18 * * 1-5 /usr/bin/flock -n /tmp/mesugak-paper-refresh.lock /home/USER/mesugak/repo/Mesugak_V2/server_runtime/run_paper_refresh_requests.sh >> /home/USER/mesugak/logs/paper_refresh_$(date +\%Y-\%m).log 2>&1
 ```
 
 The worker reads only pending requests, so an idle run makes no KIS API call.
@@ -90,9 +92,28 @@ Deploy both runner scripts, make them executable, and check health every 30
 minutes:
 
 ```cron
-*/30 * * * * /usr/bin/flock -n /tmp/mesugak-v2-health.lock /home/2023112374/mesugak/v2/run_v2_health_monitor.sh || true
+*/30 * * * * /usr/bin/flock -n /tmp/mesugak-v2-health.lock /home/USER/mesugak/repo/Mesugak_V2/server_runtime/run_v2_health_monitor.sh || true
 ```
 
 Monitor state is stored under the Git-ignored `runtime/health/` directory. A
 monitor on the school server cannot send mail while that server is fully
 offline; it reports a missed refresh when the server or cron starts again.
+
+## Git-based update
+
+Run updates from the repository root with the scheduled jobs stopped or idle:
+
+```bash
+cd /home/USER/mesugak/repo
+git pull --ff-only
+cd Mesugak_V2
+chmod 755 server_runtime/*.sh
+venv/bin/python functions/jobs/validate_scheduler_env.py
+venv/bin/python functions/jobs/smoke_test_flow.py
+```
+
+The checkout contains code and examples only. Keep `Mesugak_V2/.env.server`,
+`Mesugak_V2/functions/.env`, the Firebase credential JSON, `venv/`, and
+`runtime/` outside Git or in ignored paths. A Git update must never overwrite
+those files. After the smoke checks pass, the next cron invocation uses the new
+commit; no Firebase Function deployment is required.

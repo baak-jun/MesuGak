@@ -50,10 +50,10 @@ functions/requirements.txt
 
 ```text
 Mesugak_V2/server_runtime/run_v2_kr_close.sh
-    -> ~/mesugak/v2/run_v2_kr_close.sh
+    -> ~/mesugak/repo/Mesugak_V2/server_runtime/run_v2_kr_close.sh
 
 Mesugak_V2/server_runtime/run_v2_health_monitor.sh
-    -> ~/mesugak/v2/run_v2_health_monitor.sh
+    -> ~/mesugak/repo/Mesugak_V2/server_runtime/run_v2_health_monitor.sh
 ```
 
 이번 국내 전용 운영에는 US 실행 파일이 없습니다.
@@ -79,8 +79,8 @@ MESUGAK_ALERT_EMAIL_TO=수신용_이메일
 ## 4. 서버에서 실행할 명령
 
 ```bash
-cd ~/mesugak/v2
-chmod 755 run_v2_kr_close.sh run_v2_health_monitor.sh
+cd ~/mesugak/repo/Mesugak_V2
+chmod 755 server_runtime/*.sh
 chmod 600 functions/.env
 venv/bin/pip install -r functions/requirements.txt
 ```
@@ -98,8 +98,8 @@ venv/bin/python functions/jobs/analyze_market.py --market KR --codes 005930 --dr
 ## 5. 권장 cron
 
 ```cron
-10 16 * * 1-5 /usr/bin/flock -n /tmp/mesugak-v2-kr.lock /home/2023112374/mesugak/v2/run_v2_kr_close.sh
-*/30 * * * * /usr/bin/flock -n /tmp/mesugak-v2-health.lock /home/2023112374/mesugak/v2/run_v2_health_monitor.sh || true
+10 16 * * 1-5 /usr/bin/flock -n /tmp/mesugak-v2-kr.lock /home/USER/mesugak/repo/Mesugak_V2/server_runtime/run_v2_kr_close.sh
+*/30 * * * * /usr/bin/flock -n /tmp/mesugak-v2-health.lock /home/USER/mesugak/repo/Mesugak_V2/server_runtime/run_v2_health_monitor.sh || true
 ```
 
 `run_v2_kr_close.sh`는 분석·공개 게시가 모두 끝난 뒤 성공 시각을 기록하고,

@@ -1660,7 +1660,7 @@ export default function ResearchApp() {
           {selected && <span><strong>{selected.name}</strong><small>{selected.market}:{selected.code}</small></span>}
         </div>
         <header className="desk-topbar">
-          <div><p>{loadError || (adminViewActive ? '관리자 분석 화면 · 상세 지표 확인' : publicLiveDataApproved ? '금융위원회 공공데이터 기반 · 최근 거래일 분석' : '공개 분석을 준비 중입니다')}</p><h2>{BRAND_SHORT}</h2>{!user && <span className="topbar-disclaimer" onClick={() => setShowDisclaimerModal(true)} style={{cursor: 'pointer', textDecoration: 'underline'}}>기술지표 학습 정보이며 투자 권유가 아닙니다. (자세히)</span>}</div>
+          <div><p>{loadError || (adminViewActive ? '관리자 분석 화면 · 상세 지표 확인' : publicLiveDataApproved ? '금융위원회 공공데이터 기반 · 최근 거래일 분석' : '공개 분석을 준비 중입니다')}</p><h2>{BRAND_SHORT}</h2>{!user && <button type="button" className="topbar-disclaimer" onClick={() => setShowDisclaimerModal(true)}>기술지표 학습 정보이며 투자 권유가 아닙니다. (자세히)</button>}</div>
           <div className="topbar-actions">
             <a className="auth-button ghost research-learning-link" href="/">지표 학습</a>
             <div className="workspace-tabs" aria-label="작업 화면"><button type="button" className={workspaceView === 'console' ? 'active' : ''} onClick={() => setWorkspaceView('console')}>종목 분석</button>{adminViewActive && <button type="button" className={workspaceView === 'executions' ? 'active' : ''} onClick={() => setWorkspaceView('executions')}>모의투자 성과</button>}</div>
