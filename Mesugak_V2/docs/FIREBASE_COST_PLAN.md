@@ -27,6 +27,9 @@ Hosting-only releases are allowed after the frontend checks pass.
 5. Hashed frontend assets receive a one-year immutable cache header. The HTML
    shell remains revalidated so releases still appear promptly.
 6. The analysis/Firebase bundle is lazy-loaded only on the analysis route.
+7. Daily analysis skips the full-collection retention scan by default. Enable
+   `MESUGAK_ENABLE_RETENTION_CLEANUP=true` only for a deliberate maintenance
+   run, because cleanup reads and deletes are billable operations.
 
 ## Expected request budget
 

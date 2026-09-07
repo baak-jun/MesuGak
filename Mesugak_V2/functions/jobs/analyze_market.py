@@ -41,8 +41,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--skip-retention-cleanup",
         action="store_true",
-        default=False,
-        help="Skip automatic cleanup of past operational data",
+        default=os.getenv("MESUGAK_ENABLE_RETENTION_CLEANUP", "false").strip().lower() not in {"1", "true", "yes", "on"},
+        help="Skip cleanup of past operational data (enabled only when MESUGAK_ENABLE_RETENTION_CLEANUP is true)",
     )
     parser.add_argument(
         "--history-limit",

@@ -117,3 +117,7 @@ The checkout contains code and examples only. Keep `Mesugak_V2/.env.server`,
 `runtime/` outside Git or in ignored paths. A Git update must never overwrite
 those files. After the smoke checks pass, the next cron invocation uses the new
 commit; no Firebase Function deployment is required.
+
+Retention cleanup is disabled for the scheduled analysis by default. Set
+`MESUGAK_ENABLE_RETENTION_CLEANUP=true` in the protected `functions/.env` only
+for a planned maintenance run, then turn it off again.
