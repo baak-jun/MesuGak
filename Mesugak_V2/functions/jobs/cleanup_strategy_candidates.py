@@ -34,6 +34,7 @@ def run(args: argparse.Namespace) -> int:
     collection = db.collection("strategy_candidates")
     batch_size = max(1, min(500, int(args.batch_size)))
     deleted_total = 0
+    retry_count = 0
 
     print(f"[cleanup] Starting deletion of 'strategy_candidates' (batch size: {batch_size})...", flush=True)
 
@@ -45,27 +46,35 @@ def run(args: argparse.Namespace) -> int:
                 break
             limit = min(batch_size, remaining)
 
-        # select([]) retrieves only document IDs/references without heavy fields
-        docs = list(collection.select([]).limit(limit).stream())
-        if not docs:
-            break
-
         try:
+            # select([]) retrieves only document IDs/references without heavy fields
+            docs = list(collection.select([]).limit(limit).stream())
+            if not docs:
+                break
+
             batch = db.batch()
             for doc in docs:
                 batch.delete(doc.reference)
             batch.commit()
 
             deleted_total += len(docs)
+            retry_count = 0
             if deleted_total % 250 == 0 or len(docs) < limit:
-                print(f"[cleanup] Deleted {deleted_total} documents...", flush=True)
-            time.sleep(0.05)
+                print(f"[cleanup] Deleted {deleted_total} documents so far...", flush=True)
+            time.sleep(0.1)
         except Exception as exc:
-            if "Transaction too big" in str(exc) or "INVALID_ARGUMENT" in str(exc):
+            exc_str = str(exc)
+            if "Transaction too big" in exc_str or "INVALID_ARGUMENT" in exc_str:
                 if batch_size > 10:
                     batch_size = max(10, batch_size // 2)
-                    print(f"[cleanup] Batch size exceeded Firestore 10MB limit. Auto-reduced batch size to {batch_size}. Retrying...", flush=True)
+                    print(f"[cleanup] Batch size exceeded Firestore limit. Reduced batch size to {batch_size}. Retrying...", flush=True)
                     continue
+            elif any(err in exc_str for err in ("503", "UNAVAILABLE", "RetryError", "DeadlineExceeded", "ResourceExhausted", "429", "timeout", "unavailable")):
+                retry_count += 1
+                backoff = min(30, 2 ** min(retry_count, 5))
+                print(f"[cleanup] Firestore throttled / temporarily unavailable (attempt {retry_count}). Waiting {backoff}s...", flush=True)
+                time.sleep(backoff)
+                continue
             raise
 
     print(f"[cleanup] Done. Total 'strategy_candidates' documents deleted: {deleted_total}", flush=True)
