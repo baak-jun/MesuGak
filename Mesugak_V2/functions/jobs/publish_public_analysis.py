@@ -40,6 +40,13 @@ def _private_chunks(repo: FirestoreStrategyRepository, market: str) -> list[list
 
 
 def _existing_public_chunk_count(repo: FirestoreStrategyRepository, market: str) -> int:
+    if hasattr(repo, "existing_public_chunk_count"):
+        return repo.existing_public_chunk_count(market)
+    manifest_doc = repo.db.collection("public_analysis_meta").document(f"public_meta_v2_{market}_manifest").get()
+    if manifest_doc.exists:
+        count = manifest_doc.to_dict().get("chunkCount")
+        if count is not None:
+            return int(count)
     prefix = f"public_meta_v2_{market}_"
     return sum(
         1
@@ -63,13 +70,28 @@ def run(args: argparse.Namespace, repo: FirestoreStrategyRepository | None = Non
     )
     chunk_size = max(1, int(args.meta_chunk_size or 30))
     previous_count = _existing_public_chunk_count(repo, market)
+    chunks = []
     written = 0
     for index in range(0, len(public_rows), chunk_size):
-        repo.save_public_meta_chunk(market, written, public_rows[index : index + chunk_size])
+        chunks.append((written, public_rows[index : index + chunk_size]))
         written += 1
-    for index in range(written, max(written, previous_count)):
-        repo.delete_public_meta_chunk(market, index)
-    repo.save_public_manifest(market, public_rows, written, chunk_size)
+
+    if hasattr(repo, "save_public_analysis_batch"):
+        repo.save_public_analysis_batch(
+            market=market,
+            chunks=chunks,
+            manifest_items=public_rows,
+            chunk_count=written,
+            page_size=chunk_size,
+            start_delete_index=written,
+            previous_count=previous_count,
+        )
+    else:
+        for chunk_idx, chunk_items in chunks:
+            repo.save_public_meta_chunk(market, chunk_idx, chunk_items)
+        for index in range(written, max(written, previous_count)):
+            repo.delete_public_meta_chunk(market, index)
+        repo.save_public_manifest(market, public_rows, written, chunk_size)
 
     return {"market": market, "publicRowCount": len(public_rows), "chunkCount": written}
 

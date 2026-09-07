@@ -32,6 +32,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reset-checkpoint", action="store_true")
     parser.add_argument("--meta-chunk-size", type=int, default=400)
     parser.add_argument("--progress-interval", type=int, default=10, help="Print progress every N processed stocks")
+    parser.add_argument(
+        "--retention-days",
+        type=int,
+        default=int(os.getenv("MESUGAK_RETENTION_DAYS", "30")),
+        help="Number of days to keep historical operational data (default: 30)",
+    )
+    parser.add_argument(
+        "--skip-retention-cleanup",
+        action="store_true",
+        default=False,
+        help="Skip automatic cleanup of past operational data",
+    )
+    parser.add_argument(
+        "--history-limit",
+        type=int,
+        default=int(os.getenv("MESUGAK_HISTORY_LIMIT", "130")),
+        help="Trading days of chart history to store per stock (default: 130)",
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser
 
@@ -54,11 +72,30 @@ def _load_targets(args: argparse.Namespace, market: str):
     return targets
 
 
-def _save_meta_chunks(repo: FirestoreStrategyRepository, market: str, summaries: list[dict], chunk_size: int) -> int:
+def _save_meta_chunks(
+    repo: FirestoreStrategyRepository,
+    market: str,
+    summaries: list[dict],
+    chunk_size: int,
+    previous_count: int = 0,
+) -> int:
+    chunks = []
     chunk_count = 0
     for index in range(0, len(summaries), chunk_size):
-        repo.save_meta_chunk(market, chunk_count, summaries[index : index + chunk_size])
+        chunks.append((chunk_count, summaries[index : index + chunk_size]))
         chunk_count += 1
+    if hasattr(repo, "save_meta_chunks_batch"):
+        repo.save_meta_chunks_batch(
+            market,
+            chunks,
+            start_delete_index=chunk_count,
+            previous_count=previous_count,
+        )
+    else:
+        for chunk_idx, items in chunks:
+            repo.save_meta_chunk(market, chunk_idx, items)
+        for index in range(chunk_count, max(chunk_count, previous_count)):
+            repo.delete_meta_chunk(market, index)
     return chunk_count
 
 
@@ -140,6 +177,19 @@ def run(args: argparse.Namespace) -> dict:
     skipped_count = initial_done_count
     started_at = time.monotonic()
     progress_interval = max(1, int(args.progress_interval or 10))
+    write_batch_size = 40
+    batch_buffer: list[tuple[str, dict]] = []
+
+    def flush_batch() -> None:
+        nonlocal batch_buffer
+        if repo and batch_buffer:
+            if hasattr(repo, "save_stock_analyses_batch"):
+                repo.save_stock_analyses_batch(batch_buffer)
+            else:
+                for doc_id, item_payload in batch_buffer:
+                    repo.save_stock_analysis(doc_id, item_payload)
+            batch_buffer = []
+
     print(
         f"[start] {market} runId={run_id} targets={len(targets)} "
         f"resumeDone={initial_done_count} remaining={len(remaining_targets)} dryRun={bool(args.dry_run)}",
@@ -159,6 +209,7 @@ def run(args: argparse.Namespace) -> dict:
                         marcap=target.marcap,
                     ),
                     fundamentals={},
+                    history_limit=getattr(args, "history_limit", 130),
                 )
                 if not payload:
                     failure = {"code": target.code, "reason": "insufficient_data"}
@@ -168,7 +219,9 @@ def run(args: argparse.Namespace) -> dict:
                 summary = to_summary(payload)
                 summaries.append(summary)
                 if repo:
-                    repo.save_stock_analysis(payload["id"], payload)
+                    batch_buffer.append((payload["id"], payload))
+                    if len(batch_buffer) >= write_batch_size:
+                        flush_batch()
                 checkpoint.record_success(target.code, summary, remaining_count)
             except Exception as exc:
                 failure = {"code": target.code, "reason": f"{type(exc).__name__}: {exc}"}
@@ -189,11 +242,10 @@ def run(args: argparse.Namespace) -> dict:
                             current_code=target.code,
                             current_name=target.name,
                         )
-
+        flush_batch()
         if repo:
             print(f"[meta] writing {len(summaries)} summaries to meta_data chunks size={args.meta_chunk_size}", flush=True)
-            meta_doc_count = _save_meta_chunks(repo, market, summaries, args.meta_chunk_size)
-            _delete_stale_meta_chunks(repo, market, meta_doc_count, previous_meta_doc_count)
+            meta_doc_count = _save_meta_chunks(repo, market, summaries, args.meta_chunk_size, previous_count=previous_meta_doc_count)
             checkpoint.update_meta_doc_count(meta_doc_count)
             repo.save_strategy_run(
                 run_id,
@@ -207,6 +259,11 @@ def run(args: argparse.Namespace) -> dict:
                     "failures": failures,
                 },
             )
+            if not getattr(args, "skip_retention_cleanup", False) and hasattr(repo, "cleanup_past_data"):
+                retention_days = max(1, int(getattr(args, "retention_days", 30) or 30))
+                print(f"[retention] cleaning up operational data older than {retention_days} days...", flush=True)
+                cleanup_summary = repo.cleanup_past_data(market=market, retention_days=retention_days)
+                print(f"[retention] cleanup finished: {cleanup_summary}", flush=True)
         checkpoint.mark_done()
         _print_progress(
             market=market,
@@ -219,6 +276,10 @@ def run(args: argparse.Namespace) -> dict:
             force=True,
         )
     except Exception:
+        try:
+            flush_batch()
+        except Exception:
+            pass
         checkpoint.mark_interrupted()
         checkpoint_label = str(checkpoint.path) if checkpoint.path else "disabled"
         print(

@@ -67,7 +67,7 @@ def _relative_pct(numerator: float, denominator: float) -> float:
     return round((numerator / denominator - 1.0) * 100.0, 4)
 
 
-def build_history(df: pd.DataFrame, limit: int = 260) -> list[dict[str, Any]]:
+def build_history(df: pd.DataFrame, limit: int = 130) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     recent = df.tail(limit).copy()
 
@@ -97,6 +97,7 @@ def analyze_stock(
     df: pd.DataFrame,
     identity: StockIdentity,
     fundamentals: dict[str, Any] | None = None,
+    history_limit: int = 130,
 ) -> dict[str, Any] | None:
     if df is None or df.empty or len(df) < 120:
         return None
@@ -107,7 +108,7 @@ def analyze_stock(
 
     score = score_latest(enriched, fundamentals=fundamentals)
     risk = evaluate_risk(enriched)
-    history = build_history(enriched)
+    history = build_history(enriched, limit=history_limit)
     current_price = _latest_number(latest, "close")
     bandwidth = _latest_number(latest, "bb_bandwidth")
     percent_b = _latest_number(latest, "bb_percent_b")
