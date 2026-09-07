@@ -50,12 +50,12 @@ def verified_archive(directory, snapshots):
     return path
 
 
-def run(mode, root, limit):
+def run(mode, root, limit, backup_only=False):
     from google.cloud.firestore_v1 import LastUpdateOption
     if not 1 <= limit <= 5000:
         raise ValueError('Maintenance limit must be 1..5000')
     drained = root / 'cost' / 'candidates-drained'
-    if mode == 'archive-candidates' and drained.exists():
+    if mode == 'archive-candidates' and drained.exists() and not backup_only:
         return {'collection': 'strategy_candidates', 'status': 'already-drained'}
     db = init_firestore()
     name = 'strategy_candidates' if mode == 'archive-candidates' else 'stock_analysis'
@@ -70,7 +70,7 @@ def run(mode, root, limit):
             query = query.start_after(cursor)
         snapshots = list(query.stream())
         if not snapshots:
-            if mode == 'archive-candidates':
+            if mode == 'archive-candidates' and not backup_only:
                 drained.write_text(datetime.now(timezone.utc).isoformat(), encoding='utf-8')
             break
         updates = []
@@ -81,6 +81,11 @@ def run(mode, root, limit):
                 updates.append((snapshot, compact))
         if updates:
             archive = verified_archive(root / 'cloud-archives', [s for s, _ in updates])
+            if backup_only:
+                processed += len(snapshots)
+                cursor = snapshots[-1]
+                print(json.dumps({'collection': name, 'backedUp': processed, 'archive': archive.name}), flush=True)
+                continue
             operation = 'deletes' if mode == 'archive-candidates' else 'writes'
             reserve_daily(ledger, f'maintenance_{operation}', len(updates), 5000)
             batch = db.batch()
@@ -97,10 +102,10 @@ def run(mode, root, limit):
         processed += len(snapshots)
         cursor = snapshots[-1]
         if len(snapshots) < size:
-            if mode == 'archive-candidates':
+            if mode == 'archive-candidates' and not backup_only:
                 drained.write_text(datetime.now(timezone.utc).isoformat(), encoding='utf-8')
             break
-    return {'collection': name, 'processed': processed, 'changed': changed}
+    return {'collection': name, 'processed': processed, 'changed': changed, 'backupOnly': backup_only}
 
 
 if __name__ == '__main__':
@@ -108,5 +113,6 @@ if __name__ == '__main__':
     parser.add_argument('--mode', choices=['archive-candidates', 'compact-analysis'], required=True)
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[2] / 'runtime')
     parser.add_argument('--limit', type=int, default=5000)
+    parser.add_argument('--backup-only', action='store_true', help='Verify server archives without any cloud writes/deletes')
     args = parser.parse_args()
-    print(run(args.mode, args.root, args.limit))
+    print(run(args.mode, args.root, args.limit, args.backup_only))
