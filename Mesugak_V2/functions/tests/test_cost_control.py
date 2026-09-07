@@ -9,10 +9,19 @@ from strategy_engine.storage_policy import compact_analysis, MAX_ANALYSIS_BYTES
 import json
 import gzip
 import base64
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 
 class CostControlTests(unittest.TestCase):
+    def test_maintenance_stops_before_firestore_reads_when_metrics_fail(self):
+        from jobs.maintain_cloud_storage import run
+        with tempfile.TemporaryDirectory() as root, \
+             patch('jobs.maintain_cloud_storage.check_cloud_budget', side_effect=RuntimeError('over budget')), \
+             patch('jobs.maintain_cloud_storage.init_firestore') as init:
+            with self.assertRaises(RuntimeError):
+                run('archive-candidates', Path(root), 50, backup_only=True)
+            init.assert_not_called()
+
     def test_backup_roundtrip_preserves_firestore_types(self):
         from google.cloud.firestore_v1.types import Document
         from google.cloud.firestore_v1 import _helpers

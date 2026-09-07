@@ -29,7 +29,10 @@ no-overage policy. Do not claim zero cost while Blaze remains linked.
 `functions/jobs/maintain_cloud_storage.py --mode archive-candidates --limit 5000`
 archives and deletes at most 5,000 legacy candidate documents. Daily maintenance
 allowances: 15,000 reads, 5,000 deletes, 5,000 writes across all invocations on this
-server. Other clients' usage is not included. There can still be cleanup costs
+server. Cloud Monitoring rolling-24-hour read/write/delete counts plus planned
+operations are checked before the first read and again every 500 documents.
+Missing permissions or exhausted thresholds block maintenance. Storage thresholds
+do not block cleanup itself. Other clients can still race delayed metrics. There can still be cleanup costs
 if other clients consumed the free quota, and storage is billed until reduced.
 
 `--mode compact-analysis --limit 5000` archives original stock documents before
@@ -54,7 +57,8 @@ fields = _helpers.decode_dict(document.fields, db)
 # db.document(row['path']).set(fields)
 ```
 
-The daily maintenance wrapper only drains legacy candidates; it does not scan
-the stock collection every day. Disable its cron entry after count reaches zero.
+The daily maintenance wrapper drains legacy candidates and compacts existing
+stock charts once. Completion markers are written only after an exhausted query;
+subsequent runs return locally without Firestore requests.
 Current status is recorded locally in `runtime/cost/status.json` and maintenance
 progress in `runtime/cost/maintenance.log`.

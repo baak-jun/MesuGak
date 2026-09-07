@@ -47,7 +47,7 @@ def latest_storage(series, now):
     return total
 
 
-def check_cloud_budget():
+def check_cloud_budget(*, storage_required=True, planned_reads=0, planned_writes=0, planned_deletes=0):
     from google.oauth2 import service_account
     from google.auth.transport.requests import AuthorizedSession
     from .repositories import resolve_cred_path
@@ -68,17 +68,20 @@ def check_cloud_budget():
             raise RuntimeError('Incomplete monitoring response')
         return body.get('timeSeries', [])
 
-    storage = latest_storage(query('storage/data_and_index_storage_bytes', now - timedelta(hours=26)), now)
-    result = {'checkedAt': now.isoformat(), 'storageBytes': storage, 'limitBytes': 700 * 1024**2}
-    if storage > result['limitBytes']:
-        raise RuntimeError(f'Storage {storage} bytes exceeds 700 MiB; cloud job blocked')
+    result = {'checkedAt': now.isoformat(), 'limitBytes': 700 * 1024**2}
+    if storage_required:
+        storage = latest_storage(query('storage/data_and_index_storage_bytes', now - timedelta(hours=26)), now)
+        result['storageBytes'] = storage
+        if storage > result['limitBytes']:
+            raise RuntimeError(f'Storage {storage} bytes exceeds 700 MiB; cloud job blocked')
     # Rolling 24 hours is deliberately more conservative than the daily quota window.
+    planned = {'read': planned_reads, 'write': planned_writes, 'delete': planned_deletes}
     for name, ceiling in [('read', 30000), ('write', 12000), ('delete', 12000)]:
         series = query(f'document/{name}_ops_count', now - timedelta(hours=24))
         count = sum(int(p['value']['int64Value']) for s in series for p in s.get('points', []))
         result[name] = count
-        if count > ceiling:
-            raise RuntimeError(f'Observed {name} operations exceed the safety threshold')
+        if planned[name] < 0 or count + planned[name] > ceiling:
+            raise RuntimeError(f'Observed {name} operations ({count}) plus planned ({planned[name]}) exceed safety threshold {ceiling}')
     return result
 
 

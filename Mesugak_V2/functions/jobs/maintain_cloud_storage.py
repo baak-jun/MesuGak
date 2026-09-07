@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from strategy_engine.repositories import init_firestore
-from strategy_engine.cost_control import reserve_daily
+from strategy_engine.cost_control import reserve_daily, check_cloud_budget
 from strategy_engine.storage_policy import compact_analysis
 
 
@@ -54,15 +54,24 @@ def run(mode, root, limit, backup_only=False):
     from google.cloud.firestore_v1 import LastUpdateOption
     if not 1 <= limit <= 5000:
         raise ValueError('Maintenance limit must be 1..5000')
-    drained = root / 'cost' / 'candidates-drained'
-    if mode == 'archive-candidates' and drained.exists() and not backup_only:
-        return {'collection': 'strategy_candidates', 'status': 'already-drained'}
-    db = init_firestore()
     name = 'strategy_candidates' if mode == 'archive-candidates' else 'stock_analysis'
+    drained = root / 'cost' / ('candidates-drained' if mode == 'archive-candidates' else 'analysis-compacted')
+    if drained.exists() and not backup_only:
+        return {'collection': name, 'status': 'already-completed'}
+    # Cleanup must be possible while storage is over budget, but cannot bypass
+    # the observed request budget. Check before the very first document read.
+    check_cloud_budget(storage_required=False, planned_reads=limit,
+                       planned_writes=limit if mode == 'compact-analysis' and not backup_only else 0,
+                       planned_deletes=limit if mode == 'archive-candidates' and not backup_only else 0)
+    db = init_firestore()
     processed = changed = 0
     cursor = None
     ledger = root / 'cost' / 'budget.sqlite3'
     while processed < limit:
+        if processed and processed % 500 == 0:
+            check_cloud_budget(storage_required=False, planned_reads=limit-processed,
+                               planned_writes=limit-processed if mode == 'compact-analysis' and not backup_only else 0,
+                               planned_deletes=limit-processed if mode == 'archive-candidates' and not backup_only else 0)
         size = min(50, limit - processed)
         reserve_daily(ledger, 'maintenance_reads', size, 15000)
         query = db.collection(name).order_by('__name__').limit(size)
@@ -70,7 +79,7 @@ def run(mode, root, limit, backup_only=False):
             query = query.start_after(cursor)
         snapshots = list(query.stream())
         if not snapshots:
-            if mode == 'archive-candidates' and not backup_only:
+            if not backup_only:
                 drained.write_text(datetime.now(timezone.utc).isoformat(), encoding='utf-8')
             break
         updates = []
@@ -102,7 +111,7 @@ def run(mode, root, limit, backup_only=False):
         processed += len(snapshots)
         cursor = snapshots[-1]
         if len(snapshots) < size:
-            if mode == 'archive-candidates' and not backup_only:
+            if not backup_only:
                 drained.write_text(datetime.now(timezone.utc).isoformat(), encoding='utf-8')
             break
     return {'collection': name, 'processed': processed, 'changed': changed, 'backupOnly': backup_only}
