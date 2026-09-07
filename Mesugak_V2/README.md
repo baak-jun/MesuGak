@@ -139,9 +139,11 @@ firebase deploy --only hosting,firestore:rules
 ```
 
 The scheduled analysis and paper-trading jobs run on the school server, not as
-Firebase Functions. Copy the complete `Mesugak_V2\functions` directory there,
-install `functions\requirements.txt`, and keep the KIS/Firebase credentials in
-the server environment only.
+Firebase Functions. Clone this repository on the server and run the tracked
+wrappers in `Mesugak_V2/server_runtime/`; keep `Mesugak_V2/.env.server`,
+`Mesugak_V2/functions/.env`, and the Firebase credential JSON in protected
+ignored paths. The wrappers resolve the V2 root from their own location, so a
+fast-forward Git update does not require copying individual files.
 
 Run the school-server paper flow on the operator's weekday schedule. Analysis
 and flow-size controls are command-line options such as `--max-stocks`,

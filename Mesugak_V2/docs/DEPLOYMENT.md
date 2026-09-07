@@ -15,9 +15,10 @@ firebase deploy --only hosting,firestore:rules
 
 V2 does not deploy the analysis worker as a Firebase Function. The school
 server owns Financial Services Commission public-data KR market analysis, KIS virtual-account credentials,
-paper orders, and Firestore writes. Upload the complete `Mesugak_V2\functions` directory, install its
-requirements, and run the jobs from that server with the protected environment
-file described in `docs\SCHOOL_SERVER_PAPER_TRADING.md`.
+paper orders, and Firestore writes. Clone the repository on that server, install
+the requirements for `Mesugak_V2/functions`, and run the tracked wrappers in
+`Mesugak_V2/server_runtime/` with the protected environment files described in
+`docs\SCHOOL_SERVER_PAPER_TRADING.md`.
 
 The command-line flow controls are:
 
