@@ -1,0 +1,212 @@
+﻿
+> const educationalGuides = {
+    bollinger: {
+      title: '蹂쇰┛? 諛대뱶 (Bollinger Bands)',
+      points: [
+        { 
+          label: '?ㅽ댁쫰 ?뚰뙆 (+90??', 
+          desc: '諛대뱶媛 醫곴쾶 ?〓낫(???묒텞)?섎떎媛, ?곷떒 諛대뱶瑜?媛뺥븯寃??リ퀬 諛대뱶媛 ?곹븯濡??볦뼱吏??諛쒖궛) 媛뺣젰???곸듅 ?좏샇?낅땲??',
+          graphic: (
+            <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+              <path d="M 10,70 L 120,70 Q 180,70 280,40" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strok
+eDasharray="3,3" />
+              <path d="M 10,50 L 120,50 Q 180,50 280,10" fill="none" stroke="var(--text-soft)" strokeWidth="1.5" />
+              <path d="M 10,90 L 120,90 Q 180,90 280,110" fill="none" stroke="var(--text-soft)" strokeWidth="1.5" />
+              <Candle x={30} h={55} l={85} o={75} c={65} />
+              <Candle x={60} h={60} l={80} o={65} c={75} />
+              <Candle x={90} h={50} l={80} o={75} c={55} />
+              <Candle x={120} h={45} l={60} o={55} c={48} />
+              <Candle x={150} h={25} l={50} o={48} c={32} />
+              <Candle x={180} h={10} l={40} o={32} c={15} />
+              <Candle x={210} h={5} l={30} o={20} c={10} />
+              <Candle x={240} h={10} l={25} o={12} c={22} />
+              <text x="160" y="25" fontSize="12" fill="#ef4444" fontWeight="bold">?곷떒???뚰뙆(諛쒖궛)</text>
+              <text x="10" y="45" fontSize="11" fill="var(--text-soft)">?곷떒諛대뱶</text>
+              <text x="10" y="65" fontSize="11" fill="var(--text-soft)">以묒떖??MA20)</text>
+              <text x="10" y="105" fontSize="11" fill="var(--text-soft)">?섎떒諛대뱶</text>
+            </svg>
+          )
+        },
+        { 
+          label: '?⑥닚 ?섏텞 (+35??', 
+          desc: '蹂쇰┛? 諛대뱶???곷떒怨??섎떒 ??씠 醫곸븘吏硫?媛寃⑹씠 以묒떖??遺洹쇱뿉???〓낫?섎뒗 ?곹깭?낅땲?? 怨???蹂?숈씠 ?????덉뒿?덈떎.',
+          graphic: (
+            <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+              <path d="M 10,40 Q 150,60 280,60" fill="none" stroke="var(--text-soft)" strokeWidth="1.5" />
+              <path d="M 10,60 Q 150,70 280,70" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeDasharra
+y="3,3" />
+              <path d="M 10,80 Q 150,80 280,80" fill="none" stroke="var(--text-soft)" strokeWidth="1.5" />
+              <Candle x={40} h={30} l={70} o={45} c={65} />
+              <Candle x={80} h={40} l={75} o={65} c={50} />
+              <Candle x={120} h={50} l={80} o={50} c={70} />
+              <Candle x={160} h={55} l={85} o={70} c={65} />
+              <Candle x={200} h={60} l={80} o={65} c={75} />
+              <Candle x={240} h={62} l={78} o={75} c={68} />
+              <text x="150" y="45" fontSize="12" fill="var(--text)" fontWeight="bold">諛대뱶??異뺤냼(?섏텞)</text>
+            </svg>
+          )
+        },
+        { 
+          label: '?섎떒 遺뺢눼 (-45??', 
+          desc: '?섎떒 諛대뱶瑜?源④퀬 ?대젮媛硫?諛대뱶媛 ?볦뼱吏???⑦꽩?낅땲?? 媛뺥븳 ?섎씫 異붿꽭媛 ?쒖옉?????덉뼱 二쇱쓽?댁빞 ?⑸땲??',
+          graphic: (
+            <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+              <path d="M 10,50 L 120,50 Q 180,50 280,20" fill="none" stroke="var(--text-soft)" strokeWidth="1.5" />
+              <path d="M 10,70 L 120,70 Q 180,70 280,85" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strok
+eDasharray="3,3" />
+              <path d="M 10,90 L 120,90 Q 180,90 280,115" fill="none" stroke="var(--text-soft)" strokeWidth="1.5" />
+              <Candle x={40} h={55} l={85} o={75} c={65} />
+              <Candle x={80} h={50} l={80} o={65} c={75} />
+              <Candle x={120} h={65} l={85} o={75} c={82} />
+              <Candle x={160} h={75} l={100} o={82} c={95} />
+              <Candle x={200} h={85} l={110} o={95} c={105} />
+              <Candle x={240} h={95} l={115} o={105} c={110} />
+              <text x="160" y="112" fontSize="12" fill="#3b82f6" fontWeight="bold">?섎떒???댄깉(??씫)</text>
+            </svg>
+          )
+        },
+        { 
+          label: '?뚰뙆 ?ㅽ뙣 (-25??', 
+          desc: '?곷떒 諛대뱶瑜??섏뿀?ㅺ? ?덉갑?섏? 紐삵븯怨??ㅼ떆 諛대뱶 ?덉そ(以묒떖??諛⑺뼢)?쇰줈 諛?ㅻ굹???⑦꽩?낅땲??',
+          graphic: (
+            <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+              <path d="M 10,50 Q 80,45 150,50 Q 220,55 280,50" fill="none" stroke="var(--text-soft)" strokeWidth="1.5" 
+/>
+              <path d="M 10,70 Q 150,70 280,70" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeDasharra
+y="3,3" />
+              <path d="M 10,90 Q 150,90 280,90" fill="none" stroke="var(--text-soft)" strokeWidth="1.5" />
+              <Candle x={40} h={55} l={85} o={75} c={60} />
+              <Candle x={80} h={35} l={70} o={60} c={40} />
+              <Candle x={120} h={25} l={50} o={40} c={30} />
+              <Candle x={160} h={30} l={65} o={30} c={60} />
+              <Candle x={200} h={45} l={75} o={60} c={70} />
+              <Candle x={240} h={65} l={85} o={70} c={80} />
+              <text x="150" y="25" fontSize="12" fill="#3b82f6" fontWeight="bold">?뚰뙆 ??諛대뱶 ?덉쑝濡??섎씫</text>
+            </svg>
+          )
+        }
+      ]
+    },
+    maSupport: {
+      title: '?대룞?됯퇏??吏吏 (MA Support)',
+      points: [
+        { 
+          label: '怨⑤뱺?щ줈???덉갑 (+90??', 
+          desc: '?④린 ?대룞?됯퇏???먮뒗 二쇨?)??60???κ린 異붿꽭?좎쓣 媛뺥븯寃??リ퀬 ?щ씪媛(怨⑤뱺?щ줈?? 吏吏瑜?諛쏅뒗 ?곹깭?낅땲??',
+          graphic: (
+            <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+              <path d="M 10,90 L 280,50" fill="none" stroke="var(--accent-purple, #8b5cf6)" strokeWidth="2.5" />
+              <path d="M 10,110 Q 120,100 160,40 Q 200,60 280,20" fill="none" stroke="var(--text-muted)" strokeWidth="1
+.5" strokeDasharray="3,3" />
+              <Candle x={40} h={100} l={115} o={110} c={105} />
+              <Candle x={80} h={80} l={110} o={105} c={85} />
+              <Candle x={120} h={50} l={90} o={85} c={60} />
+              <Candle x={160} h={40} l={65} o={60} c={45} />
+              <Candle x={200} h={40} l={60} o={45} c={55} />
+              <Candle x={240} h={20} l={55} o={55} c={25} />
+              <text x="180" y="80" fontSize="12" fill="#ef4444" fontWeight="bold">?κ린?????덉갑(吏吏)</text>
+              <text x="10" y="80" fontSize="11" fill="var(--accent-purple, #8b5cf6)">60?쇱꽑(?κ린)</text>
+              <text x="10" y="105" fontSize="11" fill="var(--text-soft)">20?쇱꽑(?④린)</text>
+            </svg>
+          )
+        },
+        { 
+          label: '?κ린?????좎? (+70??', 
+          desc: '二쇨?媛 ?κ린???꾩뿉??袁몄???吏吏瑜?諛쏆쑝硫?異붿꽭媛 爰얠씠吏 ?딄퀬 ?몄븞?섍쾶 ?곸듅?섎뒗 ?곹깭?낅땲??',
+          graphic: (
+            <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+              <path d="M 10,100 L 280,70" fill="none" stroke="var(--accent-purple, #8b5cf6)" strokeWidth="2.5" />
+              <Candle x={40} h={40} l={75} o={50} c={65} />
+              <Candle x={80} h={55} l={85} o={65} c={75} />
+              <Candle x={120} h={70} l={95} o={75} c={90} />
+              <Candle x={160} h={55} l={90} o={90} c={65} />
+              <Candle x={200} h={35} l={75} o={65} c={45} />
+              <Candle x={240} h={25} l={60} o={45} c={30} />
+              <text x="10" y="90" fontSize="11" fill="var(--accent-purple, #8b5cf6)">60?쇱꽑(?κ린)</text>
+              <text x="100" y="110" fontSize="12" fill="#ef4444" fontWeight="bold">?κ린???곗튂 ??諛섎벑</text>
+            </svg>
+          )
+        },
+        { 
+          label: '?곕뱶?щ줈??遺뺢눼 (-35??', 
+          desc: '吏耳쒖＜???κ린 吏吏?좎씠 ?ル젮 ?꾨옒濡??대젮媛??꾪뿕 ?곹깭?낅땲?? 異붿꽭媛 ?섎씫?쇰줈 爰얠씪 ???덉뒿?덈떎.',
+          graphic: (
+            <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+              <path d="M 10,70 L 280,60" fill="none" stroke="var(--accent-purple, #8b5cf6)" strokeWidth="2.5" />
+              <Candle x={40} h={30} l={65} o={50} c={40} />
+              <Candle x={80} h={35} l={70} o={40} c={55} />
+              <Candle x={120} h={50} l={85} o={55} c={75} />
+              <Candle x={160} h={70} l={100} o={75} c={90} />
+              <Candle x={200} h={85} l={110} o={90} c={105} />
+              <text x="10" y="60" fontSize="11" fill="var(--accent-purple, #8b5cf6)">60?쇱꽑(?κ린)</text>
+              <text x="140" y="45" fontSize="12" fill="#3b82f6" fontWeight="bold">吏吏??遺뺢눼(?섎씫)</text>
+            </svg>
+          )
+        }
+      ]
+    },
+    ichimoku: {
+      title: '?쇰ぉ洹좏삎??(Ichimoku Cloud)',
+      points: [
+        { 
+          label: '援щ쫫? ??(+35??', 
+          desc: '?먭볼????????援щ쫫???リ퀬 ?щ씪媛 二쇨? ?곸듅??諛⑺빐臾쇱씠 ?곸? ?몄븞???곸듅 援ш컙?낅땲??',
+          graphic: (
+            <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+              <path d="M 10,80 Q 150,70 280,60 L 280,110 Q 150,100 10,120 Z" fill="rgba(16,185,129,0.15)" stroke="rgba(
+16,185,129,0.5)" strokeWidth="1" />
+              <Candle x={40} h={40} l={70} o={60} c={45} />
+              <Candle x={90} h={45} l={65} o={45} c={55} />
+              <Candle x={140} h={30} l={60} o={55} c={35} />
+              <Candle x={190} h={20} l={50} o={35} c={25} />
+              <Candle x={240} h={15} l={40} o={25} c={30} />
+              <text x="110" y="30" fontSize="12" fill="#ef4444" fontWeight="bold">援щ쫫 ???? ??(?곸듅 異붿꽭)</text>
+              <text x="10" y="100" fontSize="11" fill="#10b981">?묒슫(吏吏援щ쫫)</text>
+            </svg>
+          )
+        },
+        { 
+          label: '援щ쫫? ?꾨옒 (-35??', 
+          desc: '?먭볼??援щ쫫??癒몃━ ?꾩뿉??吏볥늻瑜닿퀬 ?덉뼱 ?뚰뙆?섍린 ?섎뱺 ?섎씫/?뺤껜 援ш컙?낅땲??',
+          graphic: (
+            <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+              <path d="M 10,20 Q 150,40 280,30 L 280,70 Q 150,80 10,60 Z" fill="rgba(239,68,68,0.15)" stroke="rgba(239,
+68,68,0.5)" strokeWidth="1" />
+              <Candle x={40} h={70} l={90} o={75} c={85} />
+              <Candle x={90} h={65} l={100} o={85} c={70} />
+              <Candle x={140} h={70} l={95} o={70} c={85} />
+              <Candle x={190} h={80} l={110} o={85} c={100} />
+              <Candle x={240} h={95} l={120} o={100} c={110} />
+              <text x="120" y="100" fontSize="12" fill="#3b82f6" fontWeight="bold">?먭볼?????援щ쫫)??留됲옒</text>
+              <text x="10" y="45" fontSize="11" fill="#ef4444">?뚯슫(???뎄由?</text>
+            </svg>
+          )
+        },
+        { 
+          label: '?꾪솚???몄쟾 (+25??', 
+          desc: '二쇨? ?먮쫫??媛??誘쇨컧???꾪솚???④린????湲곗???以묎린?????リ퀬 ?щ씪媛 ?④린 ?곸듅 ?먮꼫吏媛 媛뺥빐吏??곹깭?낅땲??',
+          graphic: (
+            <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+              <path d="M 10,80 L 280,60" fill="none" stroke="var(--text-soft)" strokeWidth="2" strokeDasharray="3,3" />
+              <path d="M 10,100 Q 100,90 140,50 L 280,30" fill="none" stroke="var(--accent)" strokeWidth="2" />
+              <Candle x={40} h={80} l={105} o={95} c={85} />
+              <Candle x={100} h={50} l={85} o={85} c={60} />
+              <Candle x={160} h={30} l={60} o={60} c={40} />
+              <Candle x={220} h={25} l={45} o={40} c={35} />
+              <text x="10" y="75" fontSize="11" fill="var(--text-soft)">湲곗???以묎린??</text>
+              <text x="160" y="25" fontSize="12" fill="#ef4444" fontWeight="bold">?꾪솚???④린) ?뚰뙆</text>
+            </svg>
+          )
+        }
+      ]
+    },
+    rsi: {
+      title: 'RSI (?곷?媛뺣룄吏??',
+      points: [
+        { 
+          label: '湲곗???50 ?뚰뙆 (+55??', 
+          desc: '50???섏뿀?ㅻ뒗 寃껋? 留ㅻ룄?몃낫??留ㅼ닔?멸? 媛뺥빐議뚯쓬???섎??섎ŉ, 以묒슂???곸듅 異붿꽭 ?꾪솚 ?좏샇?낅땲??',
+          graphic: (
+            <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+
+

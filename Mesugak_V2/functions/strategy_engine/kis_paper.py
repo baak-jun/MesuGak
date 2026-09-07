@@ -9,7 +9,7 @@ from datetime import date, datetime
 from pathlib import Path
 from time import time
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 
 
@@ -35,6 +35,11 @@ class KISPaperConfig:
     account_product_code: str
     base_url: str = "https://openapivts.koreainvestment.com:29443"
     token_cache_path: str = ""
+
+    def __post_init__(self) -> None:
+        parsed = urlparse(self.base_url)
+        if parsed.scheme != "https" or parsed.hostname != "openapivts.koreainvestment.com":
+            raise ValueError("KIS paper trading requires the openapivts.koreainvestment.com virtual-investment endpoint.")
 
     @classmethod
     def from_env(cls) -> "KISPaperConfig":

@@ -67,10 +67,6 @@ def _relative_pct(numerator: float, denominator: float) -> float:
     return round((numerator / denominator - 1.0) * 100.0, 4)
 
 
-    value = _clean_number(row.get(key))
-    return default if value is None else value
-
-
 def build_history(df: pd.DataFrame, limit: int = 260) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     recent = df.tail(limit).copy()
@@ -253,25 +249,16 @@ def to_public_summary(payload: dict[str, Any]) -> dict[str, Any]:
             "reasons": list(value.get("reasons") or []),
         }
 
-    # Safely expose non-price numerical metrics for educational display
-    safe_metrics = {}
-    sort_metrics = payload.get("sortMetrics") or {}
-    if "bollinger" in sort_metrics:
-        safe_metrics["bollinger"] = {
-            "percentB": sort_metrics["bollinger"].get("percentB"),
-            "bandwidth": sort_metrics["bollinger"].get("bandwidth"),
-            "bandwidthRank": sort_metrics["bollinger"].get("bandwidthRank"),
-        }
-    if "rsi" in sort_metrics:
-        safe_metrics["rsi"] = {
-            "rsi": sort_metrics["rsi"].get("rsi"),
-        }
-    if "volume" in sort_metrics:
-        safe_metrics["volume"] = {
-            "relativeVolume": sort_metrics["volume"].get("relativeVolume"),
-        }
-
     signal = payload.get("signal") or {}
+    private_label = str(payload.get("confidenceLabel") or "")
+    public_band = {
+        "STRONG_BUY": "HIGH_ALIGNMENT",
+        "BUY_CANDIDATE": "MODERATE_ALIGNMENT",
+        "WATCH": "LIMITED_ALIGNMENT",
+        "HOLD": "LIMITED_ALIGNMENT",
+        "DEFENSIVE": "CAUTION",
+        "AVOID": "CAUTION",
+    }.get(private_label, "LIMITED_ALIGNMENT")
     return {
         "id": payload.get("id"),
         "code": payload.get("code"),
@@ -279,15 +266,10 @@ def to_public_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "market": payload.get("market"),
         "strategyVersion": payload.get("strategyVersion"),
         "analysisDate": payload.get("lastDate"),
-        "status": payload.get("status"),
-        "type": payload.get("type"),
         "confidenceScore": payload.get("confidenceScore"),
-        "confidenceLabel": payload.get("confidenceLabel"),
-        "componentScores": payload.get("componentScores") or {},
+        "confidenceLabel": public_band,
         "confidenceReasons": list(payload.get("confidenceReasons") or signal.get("reasons") or []),
         "indicatorStates": indicator_states,
-        "sortMetrics": safe_metrics,
         "riskState": payload.get("riskState"),
         "riskFlags": list(payload.get("riskFlags") or []),
-        "signal": {"action": signal.get("action")},
     }

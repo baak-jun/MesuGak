@@ -1,8 +1,0 @@
-firebase-admin
-google-cloud-firestore
-python-dotenv
-pandas
-finance-datareader
-lxml
-requests
-beautifulsoup4

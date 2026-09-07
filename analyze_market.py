@@ -3,21 +3,18 @@
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
 
-from dotenv import load_dotenv
-
 FUNCTIONS_DIR = Path(__file__).resolve().parents[1]
 if str(FUNCTIONS_DIR) not in sys.path:
     sys.path.insert(0, str(FUNCTIONS_DIR))
 
-from strategy_engine.analysis import StockIdentity, analyze_stock, to_summary
+from strategy_engine.analysis import StockIdentity, analyze_stock, to_public_summary, to_summary
 from strategy_engine.checkpoints import LocalCheckpointManager, MemoryCheckpointManager, resolve_checkpoint_path
-from strategy_engine.market_data import load_market_universe, load_ohlcv_with_public_data, targets_from_codes
+from strategy_engine.market_data import load_kr_fundamentals_with_kis, load_market_universe, load_ohlcv_with_kis, targets_from_codes
 from strategy_engine.repositories import FirestoreStrategyRepository, init_firestore
 
 
@@ -67,6 +64,18 @@ def _delete_stale_meta_chunks(repo: FirestoreStrategyRepository, market: str, st
         repo.delete_meta_chunk(market, index)
 
 
+def _save_public_meta_chunks(repo: FirestoreStrategyRepository, market: str, summaries: list[dict], chunk_size: int) -> int:
+    chunk_count = 0
+    for index in range(0, len(summaries), chunk_size):
+        repo.save_public_meta_chunk(market, chunk_count, summaries[index : index + chunk_size])
+        chunk_count += 1
+    return chunk_count
+
+
+def _delete_stale_public_meta_chunks(repo: FirestoreStrategyRepository, market: str, start_index: int, previous_count: int) -> None:
+    for index in range(start_index, max(start_index, previous_count)):
+        repo.delete_public_meta_chunk(market, index)
+
 def _format_duration(seconds: float) -> str:
     seconds = max(0, int(seconds))
     hours, remainder = divmod(seconds, 3600)
@@ -76,10 +85,6 @@ def _format_duration(seconds: float) -> str:
     if minutes:
         return f"{minutes}m {secs:02d}s"
     return f"{secs}s"
-
-
-def load_server_env() -> None:
-    load_dotenv(os.getenv("MESUGAK_ENV_FILE") or str(FUNCTIONS_DIR / ".env"))
 
 
 def _print_progress(
@@ -115,8 +120,6 @@ def _print_progress(
 
 def run(args: argparse.Namespace) -> dict:
     market = str(args.market).upper().strip()
-    if market != "KR":
-        raise ValueError("Financial Services Commission public analysis supports KR only")
     targets = _load_targets(args, market)
     run_id = f"{market}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     repo = None if args.dry_run else FirestoreStrategyRepository(init_firestore(args.cred_path))
@@ -149,7 +152,13 @@ def run(args: argparse.Namespace) -> dict:
         for offset, target in enumerate(remaining_targets):
             remaining_count = len(remaining_targets) - offset - 1
             try:
-                df = load_ohlcv_with_public_data(target.code)
+                df = load_ohlcv_with_kis(target.code)
+                fundamentals = {}
+                if market == "KR":
+                    try:
+                        fundamentals = load_kr_fundamentals_with_kis(target.code)
+                    except Exception as exc:
+                        print(f"[fundamentals] {target.code} unavailable: {type(exc).__name__}: {exc}", flush=True)
                 payload = analyze_stock(
                     df,
                     StockIdentity(
@@ -158,7 +167,7 @@ def run(args: argparse.Namespace) -> dict:
                         name=target.name,
                         marcap=target.marcap,
                     ),
-                    fundamentals={},
+                    fundamentals=fundamentals,
                 )
                 if not payload:
                     failure = {"code": target.code, "reason": "insufficient_data"}
@@ -169,6 +178,7 @@ def run(args: argparse.Namespace) -> dict:
                 summaries.append(summary)
                 if repo:
                     repo.save_stock_analysis(payload["id"], payload)
+                    repo.save_strategy_candidate(f"{run_id}_{payload['id']}", payload)
                 checkpoint.record_success(target.code, summary, remaining_count)
             except Exception as exc:
                 failure = {"code": target.code, "reason": f"{type(exc).__name__}: {exc}"}
@@ -194,6 +204,10 @@ def run(args: argparse.Namespace) -> dict:
             print(f"[meta] writing {len(summaries)} summaries to meta_data chunks size={args.meta_chunk_size}", flush=True)
             meta_doc_count = _save_meta_chunks(repo, market, summaries, args.meta_chunk_size)
             _delete_stale_meta_chunks(repo, market, meta_doc_count, previous_meta_doc_count)
+            public_summaries = [to_public_summary(summary) for summary in summaries]
+            print(f"[public-meta] writing {len(public_summaries)} price-free summaries", flush=True)
+            public_meta_doc_count = _save_public_meta_chunks(repo, market, public_summaries, args.meta_chunk_size)
+            _delete_stale_public_meta_chunks(repo, market, public_meta_doc_count, previous_meta_doc_count)
             checkpoint.update_meta_doc_count(meta_doc_count)
             repo.save_strategy_run(
                 run_id,
@@ -240,7 +254,6 @@ def run(args: argparse.Namespace) -> dict:
 
 
 def main() -> None:
-    load_server_env()
     args = build_parser().parse_args()
     result = run(args)
     print(result)

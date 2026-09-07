@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import argparse
 import os
+from pathlib import Path
+
+
+DEFAULT_ENV_PATH = Path(__file__).resolve().parents[1] / ".env.example"
 
 
 ENV_DEFAULTS = {
@@ -72,7 +76,7 @@ def validate_env(values: dict[str, str]) -> list[str]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Validate scheduled function environment settings")
-    parser.add_argument("--env-file", default="Mesugak_V2/functions/.env.example")
+    parser.add_argument("--env-file", default=str(DEFAULT_ENV_PATH))
     return parser
 
 

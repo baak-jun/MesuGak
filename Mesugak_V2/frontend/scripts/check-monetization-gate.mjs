@@ -24,6 +24,11 @@ if (gate.adsRequested && gate.adsensePlacementApproved) {
   } else if (!readFileSync(adsTxtPath, 'utf8').split(/\r?\n/).includes(expected)) {
     fail('ads.txt does not contain the exact approved Google publisher line.');
   }
+  const indexPath = resolve(root, 'index.html');
+  const indexHtml = existsSync(indexPath) ? readFileSync(indexPath, 'utf8') : '';
+  if (!indexHtml.includes('fundingchoicesmessages.google.com')) {
+    fail('AdSense is enabled but the Google CMP message script is missing from frontend/index.html. Paste the exact account-specific snippet from AdSense Privacy & messaging.');
+  }
 }
 
 if (!process.exitCode) {

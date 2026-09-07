@@ -17,6 +17,9 @@ class StrategyRepository(Protocol):
     def save_public_meta_chunk(self, market: str, index: int, items: list[dict]) -> None:
         ...
 
+    def save_public_manifest(self, market: str, items: list[dict], chunk_count: int, page_size: int) -> None:
+        ...
+
     def save_private_paper_performance(self, payload: dict) -> None:
         ...
 
@@ -118,10 +121,42 @@ class FirestoreStrategyRepository:
             {
                 "market": market,
                 "strategyVersion": "V2_PUBLIC",
+                "pageIndex": index,
+                "pageSize": len(items),
                 "list": items,
                 "updatedAt": self._server_timestamp(),
             }
         )
+
+    def save_public_manifest(self, market: str, items: list[dict[str, Any]], chunk_count: int, page_size: int) -> None:
+        search_index = [
+            {
+                "code": item.get("code"),
+                "name": item.get("name"),
+                "page": index // page_size,
+            }
+            for index, item in enumerate(items)
+        ]
+        self.db.collection("public_analysis_meta").document(f"public_meta_v2_{market}_manifest").set(
+            {
+                "market": market,
+                "strategyVersion": "V2_PUBLIC_MANIFEST",
+                "totalCount": len(items),
+                "chunkCount": chunk_count,
+                "pageSize": page_size,
+                "searchIndex": search_index,
+                "updatedAt": self._server_timestamp(),
+            }
+        )
+
+    def existing_public_chunk_count(self, market: str) -> int:
+        prefix = f"public_meta_v2_{market}_"
+        count = 0
+        for snapshot in self.db.collection("public_analysis_meta").stream():
+            suffix = snapshot.id.removeprefix(prefix) if snapshot.id.startswith(prefix) else ""
+            if suffix.isdigit():
+                count += 1
+        return count
 
     def delete_public_meta_chunk(self, market: str, index: int) -> None:
         self.db.collection("public_analysis_meta").document(f"public_meta_v2_{market}_{index}").delete()

@@ -2,33 +2,15 @@
 
 This folder is the repository-tracked source for files deployed to the school server.
 
-## v1_compat
+## V2 deployment
 
-`v1_compat/` contains the exact Python modules used by the current live server
-runner. `analyzer.py` uses `FIRESTORE_BATCH_SIZE = 40` for full stock documents
-and keeps `META_CHUNK_SIZE = 400` for summary documents. This avoids Firestore's
-10 MiB commit limit while retaining the existing list format.
-
-Deploy the compatibility fix with:
-
-```bash
-scp -P <port> Mesugak_V2/server_runtime/v1_compat/analyzer.py <user>@<host>:~/chartbot/analyzer.py
-scp -P <port> Mesugak_V2/server_runtime/run_v1_kr_close.sh <user>@<host>:~/chartbot/run_kr_close.sh
-scp -P <port> Mesugak_V2/server_runtime/run_v1_us_close.sh <user>@<host>:~/chartbot/run_us_close.sh
-ssh -p <port> <user>@<host> 'chmod 755 ~/chartbot/run_v1_*_close.sh'
-```
-
-The current server cron can continue invoking its existing `run_kr_close.sh` and
-`run_us_close.sh`; copy the managed wrappers over those names if desired.
-
-## V2 migration
-
-`run_v2_kr_close.sh` and `run_v2_us_close.sh` are the V2 entry points. They run
+`run_v2_kr_close.sh` is the V2 domestic entry point. It runs
 `functions/jobs/analyze_market.py`, which writes private `meta_v2_*` documents.
 After a successful analysis they also run `publish_public_analysis.py`, which
 writes the price-free `public_analysis_meta` feed. The deployed Firestore rule
-currently keeps that feed administrator-only pending written data-rights review.
-Deploy the whole `Mesugak_V2/functions/` directory and both runner scripts to
+allows only the explicitly named public feed documents, while the frontend
+gate remains disabled until written data-rights review.
+Deploy the whole `Mesugak_V2/functions/` directory and the KR/health runner scripts to
 the path set by `MESUGAK_V2_ROOT`, then create `.env.server` from
 `.env.server.example`.
 
@@ -36,13 +18,16 @@ For the managed school-server layout, use:
 
 ```cron
 10 16 * * 1-5 /home/2023112374/mesugak/v2/run_v2_kr_close.sh
-20 5,6 * * * /home/2023112374/mesugak/v2/run_v2_us_close.sh
 ```
 
-The US wrapper checks the New York trading-day close and records a date stamp,
-so the two calls handle daylight saving time without duplicate analysis.
+The US wrapper is not part of the current public-data deployment. Remove any
+old US cron entry before enabling this schedule.
 
 Never commit the actual `.env.server` file or service-account JSON.
+
+The wrappers do not run `source venv/bin/activate`; they invoke
+`$MESUGAK_V2_ROOT/venv/bin/python` explicitly. Verify the installed root-level
+wrapper because that is the path used by cron.
 
 ## On-demand paper-account refresh
 
@@ -77,3 +62,37 @@ MESUGAK_PERFORMANCE_BASELINE_DATE=YYYY-MM-DD
 The job skips safely when that date is blank. Use the same date for the KIS
 account and KOSPI/KOSDAQ comparison; do not expose this comparison publicly
 without a separate data-rights and legal review.
+
+## Gmail refresh alerts
+
+`run_v2_kr_close.sh` sends an immediate Gmail alert when the analysis or public
+publication pipeline exits with an error. `run_v2_health_monitor.sh` separately
+detects an interrupted or stalled checkpoint and a missing weekday publication.
+It sends one recovery message after the next healthy check.
+
+Enable Google 2-Step Verification, create an app password, and add these values
+only to the protected `functions/.env` on the school server:
+
+```bash
+MESUGAK_GMAIL_USER=sender@gmail.com
+MESUGAK_GMAIL_APP_PASSWORD=16-character-app-password
+MESUGAK_ALERT_EMAIL_TO=recipient@gmail.com
+```
+
+Send one test message before installing cron:
+
+```bash
+set -a; source functions/.env; set +a
+venv/bin/python functions/jobs/monitor_school_server.py --send-test
+```
+
+Deploy both runner scripts, make them executable, and check health every 30
+minutes:
+
+```cron
+*/30 * * * * /usr/bin/flock -n /tmp/mesugak-v2-health.lock /home/2023112374/mesugak/v2/run_v2_health_monitor.sh || true
+```
+
+Monitor state is stored under the Git-ignored `runtime/health/` directory. A
+monitor on the school server cannot send mail while that server is fully
+offline; it reports a missed refresh when the server or cron starts again.

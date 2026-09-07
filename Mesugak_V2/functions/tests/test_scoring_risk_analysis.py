@@ -267,7 +267,8 @@ class ScoringRiskAnalysisTests(unittest.TestCase):
         self.assertIn("confidenceReasons", public_summary)
         self.assertIn("indicatorStates", public_summary)
         self.assertEqual(set(public_summary["indicatorStates"]["bollinger"]), {"state", "reasons"})
-        for sensitive_key in ("history", "currentPrice", "volume", "marcap", "bandwidth", "percentB", "cashTargetPct", "stopLoss", "fundamentals"):
+        self.assertIn(public_summary["confidenceLabel"], {"HIGH_ALIGNMENT", "MODERATE_ALIGNMENT", "LIMITED_ALIGNMENT", "CAUTION"})
+        for sensitive_key in ("history", "currentPrice", "volume", "marcap", "bandwidth", "percentB", "cashTargetPct", "stopLoss", "fundamentals", "componentScores", "sortMetrics", "signal", "status", "type"):
             self.assertNotIn(sensitive_key, public_summary)
 
     def test_analyze_stock_rejects_short_history(self) -> None:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -34,6 +35,25 @@ class OrderClient(KISPaperClient):
         self.calls.append(kwargs)
         return {"rt_cd": "0", "output": {"ODNO": "0000000001"}}
 class KISPaperBalanceTests(unittest.TestCase):
+    def test_rejects_non_paper_endpoint(self) -> None:
+        with self.assertRaisesRegex(ValueError, "virtual-investment endpoint"):
+            KISPaperConfig("key", "secret", "12345678", "01", "https://openapi.koreainvestment.com:9443")
+
+    @patch.dict(
+        "os.environ",
+        {
+            "KIS_PAPER_APP_KEY": "key",
+            "KIS_PAPER_APP_SECRET": "secret",
+            "KIS_PAPER_CANO": "12345678",
+            "KIS_PAPER_ACNT_PRDT_CD": "01",
+            "KIS_PAPER_BASE_URL": "https://openapi.koreainvestment.com:9443",
+        },
+        clear=False,
+    )
+    def test_environment_cannot_switch_to_real_endpoint(self) -> None:
+        with self.assertRaisesRegex(ValueError, "virtual-investment endpoint"):
+            KISPaperConfig.from_env()
+
     def test_balance_uses_one_equity_basis_for_cash_and_total_pnl(self) -> None:
         client = BalanceClient(
             {

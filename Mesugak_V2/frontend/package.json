@@ -4,11 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --configLoader runner",
     "monetization:check": "node scripts/check-monetization-gate.mjs",
+    "test:policy": "node --test scripts/content-policy.test.mjs",
     "ads:txt": "node scripts/write-ads-txt.mjs",
     "prebuild": "npm run monetization:check",
-    "build": "vite build",
+    "build": "vite build --configLoader runner",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -29,4 +30,3 @@
     "globals": "^16.5.0"
   }
 }
-

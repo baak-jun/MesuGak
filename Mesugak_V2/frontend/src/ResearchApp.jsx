@@ -1,6 +1,6 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut } from 'firebase/auth';
-import { addDoc, collection, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, where } from 'firebase/firestore';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { getRedirectResult, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
+import { addDoc, collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, where } from 'firebase/firestore';
 import {
   AlertTriangle,
   BarChart3,
@@ -20,8 +20,22 @@ import {
 import { auth, db, firebaseReady, googleProvider } from './firebase';
 import { AdSenseSlot } from './AdSenseSlot';
 import { monetizationGate } from './monetizationGate';
+import { hasSubstantialAnalysisContent } from './contentPolicy';
 import { ComplianceDock } from './LegalPages.jsx';
 import { BRAND_FULL, BRAND_SHORT } from './brand';
+import {
+  AnalysisContentsRail,
+  analysisReasonLabel,
+  educationUiCopy,
+  educationalGuides,
+  getReasonGraphic,
+  getReasonLesson,
+  isCautionReason,
+  publicIndicatorGuides,
+  publicReasonLabel,
+  publicStateExplanation,
+  publicStateLabel,
+} from './analysisEducationContent.jsx';
 import './research.css';
 
 const mockHistory = Array.from({ length: 130 }, (_, index) => {
@@ -218,12 +232,10 @@ const sortGroups = [
   },
 ];
 
-const publicSortGroups = sortGroups
-  .map((group) => ({
-    ...group,
-    options: group.options.filter((option) => option.key === 'name' || option.key === 'market' || option.key === 'confidence' || option.key.startsWith('score.')),
-  }))
-  .filter((group) => group.options.length > 0);
+const publicSortGroups = [{
+  label: '공개 요약',
+  options: sortGroups[0].options.filter((option) => ['name', 'market', 'confidence'].includes(option.key)),
+}];
 
 const sortOptions = sortGroups.flatMap((group) => group.options);
 const sortOptionByKey = Object.fromEntries(sortOptions.map((option) => [option.key, option]));
@@ -240,6 +252,10 @@ const themeClassMap = { light: 'theme-light', nightOwl: 'theme-night-owl', beige
 
 
 const statusLabels = {
+  HIGH_ALIGNMENT: '조건 일치 높음',
+  MODERATE_ALIGNMENT: '조건 일치 보통',
+  LIMITED_ALIGNMENT: '조건 일치 제한적',
+  CAUTION: '주의 조건 우세',
   STRONG_BUY: '강한 기술 조건',
   BUY_CANDIDATE: '관심 조건 충족',
   WATCH: '관찰',
@@ -267,7 +283,7 @@ const reasonLabels = {
 
 
 // Public research and advertising are fail-closed. The same gate runs before build.
-const { publicLiveDataApproved, adsensePlacementApproved } = monetizationGate(import.meta.env);
+const { publicLiveDataApproved, analysisAdsRequested } = monetizationGate(import.meta.env);
 
 function numberAt(value, path) {
   const number = path.split('.').reduce((current, key) => current?.[key], value);
@@ -319,166 +335,10 @@ function reasonLabel(value) {
   return reasonLabels[value] || String(value || '-').replaceAll('_', ' ');
 }
 
-const analysisReasonLabels = {
-  ichimoku_price_above_cloud: '주가가 구름대 위에 위치', ichimoku_price_below_cloud: '주가가 구름대 아래에 위치', ichimoku_tenkan_above_kijun: '전환선이 기준선 위에 위치', ichimoku_tenkan_below_kijun: '전환선이 기준선 아래에 위치', ichimoku_forward_cloud_bullish: '선행 구름이 상승 방향', ichimoku_forward_cloud_bearish: '선행 구름이 하락 방향', bollinger_state_squeeze_release_up: '밴드 수축 뒤 상방 확장 조건', bollinger_state_squeeze: '밴드 수축 상태', bollinger_state_upper_band_release: '상단 밴드 확장 조건', bollinger_state_below_lower_band: '하단 밴드 이탈 주의', ma_support_lower_band_above_ma60: '하단 밴드가 장기 이동평균 위에 위치', ma_support_lower_band_cross_above_ma60: '하단 밴드가 장기 이동평균을 상향 통과', ma_support_lower_band_cross_below_ma60: '하단 밴드가 장기 이동평균을 하향 통과', rsi_crossed_above_50_with_signal: 'RSI가 기준선 위로 회복', rsi_oversold_recovery: 'RSI 과매도 구간 회복', rsi_breakdown: 'RSI 약화 신호', price_breakout_with_relative_volume: '가격 확장과 거래량 확인', squeeze_release_lacks_volume: '확장 조건 대비 거래량 확인 부족', below_bollinger_lower: '하단 밴드 이탈', downside_band_expansion: '하방 밴드 확장', below_ichimoku_cloud: '구름대 하단 이탈', failed_box_breakout: '박스권 돌파 실패', bollinger_lower_crossed_above_ma60: '하단 밴드가 장기 이평선을 상향 돌파', bollinger_lower_above_ma60: '하단 밴드가 장기 이평선 위에 위치', bollinger_lower_crossed_below_ma60: '하단 밴드가 장기 이평선을 하향 돌파', negative_or_zero_earnings: '적자 또는 이익 없음', low_per: '낮은 PER', reasonable_per: '적정 PER', elevated_but_positive_per: '다소 높은 PER', high_per: '높은 PER', low_pbr: '낮은 PBR', reasonable_pbr: '적정 PBR', high_pbr: '높은 PBR', high_roe: '높은 ROE', positive_roe: '양의 ROE', negative_roe: '음의 ROE', manageable_debt: '관리 가능한 부채비율', high_debt: '높은 부채비율', operating_profit_growing: '영업이익 성장', operating_profit_shrinking: '영업이익 감소', price_above_cloud: '주가가 구름대 위에 위치', price_below_cloud: '주가가 구름대 아래에 위치', tenkan_above_kijun: '전환선이 기준선 위에 위치', tenkan_below_kijun: '전환선이 기준선 아래에 위치', bullish_forward_cloud: '선행 구름이 상승 방향', bearish_forward_cloud: '선행 구름이 하락 방향', chikou_confirmed: '후행스팬이 추세 확인', chikou_below_past_price: '후행스팬이 과거 주가 하회', bearish_rsi_divergence: 'RSI 하락 다이버전스', penalty_below_lower_band: '하단 밴드 이탈', valuation_state_valued: '가치 참고 조건 충족',
-};
-
-function analysisReasonLabel(value) { const key = String(value || '').toLowerCase(); return analysisReasonLabels[key] || key.replaceAll('_', ' '); }
-
-const publicReasonLabels = {
-  ichimoku_bearish_forward_cloud: '선행 구름은 약세 방향',
-  ichimoku_forward_cloud_bearish: '선행 구름은 약세 방향',
-  ichimoku_chikou_confirmed: '후행스팬이 현재 추세를 확인',
-  ma_state_neutral: '이동평균선은 뚜렷한 방향을 아직 만들지 않음',
-  bollinger_recent_squeeze: '최근 변동성이 수축했던 구간',
-  bollinger_bandwidth_expanding: '수축 뒤 밴드폭이 다시 넓어지는 중',
-  bollinger_upper_band_release: '상단 밴드 쪽 확장 조건',
-  volume_price_breakout_with_relative_volume: '가격 확장에 거래량 확인이 동반됨',
-  valuation_state_valued: '가치 참고 조건이 기준을 충족함',
-  valuation_low_per: '낮은 PER 참고 조건',
-  valuation_low_pbr: '낮은 PBR 참고 조건',
-  valuation_high_roe: '높은 ROE 참고 조건',
-  valuation_operating_profit_growing: '영업이익 성장 참고 조건',
-  price_above_cloud: '주가가 구름대 위에 위치',
-  tenkan_above_kijun: '전환선이 기준선 위에 위치',
-  bearish_forward_cloud: '선행 구름은 약세 방향',
-  chikou_confirmed: '후행스팬이 현재 추세를 확인',
-  recent_squeeze: '최근 변동성이 수축했던 구간',
-  bandwidth_expanding: '수축 뒤 밴드폭이 다시 넓어지는 중',
-  upper_band_release: '상단 밴드 쪽 확장 조건',
-  price_breakout_with_relative_volume: '가격 확장에 거래량 확인이 동반됨',
-  low_per: '낮은 PER 참고 조건',
-  low_pbr: '낮은 PBR 참고 조건',
-  high_roe: '높은 ROE 참고 조건',
-  operating_profit_growing: '영업이익 성장 참고 조건',
-};
-
-function normalizedReasonKey(value) {
-  return String(value || '').trim().toLowerCase().replaceAll('-', '_').replaceAll(' ', '_');
-}
-
-function publicReasonLabel(value) {
-  const key = normalizedReasonKey(value);
-  return publicReasonLabels[key] || analysisReasonLabel(key);
-}
-
-const reasonExplanations = {
-  ichimoku_price_above_cloud: '주가가 일목균형표의 구름대(저항대) 위에 위치하고 있습니다. 구름대는 강력한 지지선 역할을 하며, 주가가 구름대 위에 있다는 것은 중장기적인 상승 추세에 있음을 의미합니다.',
-  ichimoku_price_below_cloud: '주가가 구름대 아래에 위치하여 저항을 받고 있는 상태입니다. 섣부른 매수보다 확실한 돌파를 확인하는 것이 좋습니다.',
-  ichimoku_tenkan_above_kijun: '단기 추세선인 전환선이 중장기 추세선인 기준선 위에 위치해 있습니다. 이는 단기적으로 상승 모멘텀이 강하다는 긍정적인 신호(골든크로스)입니다.',
-  ichimoku_tenkan_below_kijun: '단기 추세선인 전환선이 기준선 아래로 내려왔습니다(데드크로스). 단기적인 하락 압력이 커지고 있음을 주의해야 합니다.',
-  ichimoku_forward_cloud_bullish: '미래의 주가 흐름을 예측하는 선행 스팬이 양운(상승 구름)을 형성하고 있습니다. 이는 향후 주가를 받쳐줄 지지 기반이 탄탄하다는 것을 시사합니다.',
-  ichimoku_forward_cloud_bearish: '선행 스팬이 음운(하락 구름)을 띠고 있습니다. 향후 두터운 저항대가 기다리고 있어 주가가 곧바로 상승하기 어려울 수 있습니다.',
-  ichimoku_chikou_confirmed: '현재 주가를 과거로 미뤄 그린 후행스팬이 과거의 주가보다 높게 위치하고 있습니다. 이는 현재의 상승 추세가 신뢰할 만하다는 중요한 확인(컨펌) 신호입니다.',
-  bollinger_state_squeeze_release_up: '변동성이 좁게 수축(Squeeze)되었다가 위쪽 방향으로 밴드가 넓어지며 주가가 상단을 돌파하고 있습니다. 매우 강력한 상승 추세의 시작일 가능성이 높습니다.',
-  bollinger_state_squeeze: '볼린저 밴드의 폭이 좁아지며 에너지가 응축되는 단계입니다. 조만간 위든 아래든 큰 변동성이 나타날 수 있으므로 방향이 정해질 때까지 주시해야 합니다.',
-  bollinger_state_upper_band_release: '주가가 볼린저 밴드 상단을 돌파하거나 타면서 상승하고 있습니다. 매수세가 아주 강한 상태를 나타냅니다.',
-  bollinger_state_below_lower_band: '주가가 밴드 하단을 깨고 내려갔습니다. 강한 하락 추세가 진행 중이므로 반등을 기대한 매수에 신중해야 합니다.',
-  ma_support_lower_band_above_ma60: '밴드 하단이 장기 추세선인 60일 이동평균선보다 위에 있습니다. 가격이 떨어지더라도 여러 겹의 지지를 받을 수 있는 안정적인 상태입니다.',
-  ma_support_lower_band_cross_above_ma60: '밴드 하단이 60일 선을 위로 돌파하며 추세가 호전되고 있습니다. 중장기적인 추세가 하락에서 상승으로 돌아설 때 나타나는 신호입니다.',
-  rsi_crossed_above_50_with_signal: 'RSI(상대강도지수)가 50 기준선을 넘어섰으며, 시그널 선도 함께 돌파했습니다. 시장의 힘이 매도 우위에서 매수 우위로 완전히 넘어왔음을 의미합니다.',
-  rsi_oversold_recovery: 'RSI가 과매도(보통 30 이하) 구간까지 하락했다가 다시 반등하는 모습입니다. 단기적인 낙폭 과대로 인해 저가 매수세가 유입되고 있음을 시사합니다.',
-  rsi_breakdown: 'RSI가 하락하며 매수 동력이 크게 약화되었습니다. 단기적으로 하락세가 짙어질 가능성이 높으므로 방어가 필요합니다.',
-  price_breakout_with_relative_volume: '주가가 중요한 가격대를 돌파할 때 거래량이 평소보다 크게 증가했습니다. 이는 단순한 속임수가 아니라 의미 있는 자금이 유입된 긍정적인 돌파로 해석됩니다.',
-  squeeze_release_lacks_volume: '가격은 밴드 상단을 뚫었으나 거래량이 평소 수준에 그치고 있습니다. 상승 동력이 오래가지 못하고 다시 밴드 안으로 들어올 위험(속임수)이 있습니다.',
-  downside_band_expansion: '볼린저 밴드 폭이 넓어지는 동시에 주가가 하단으로 향하고 있습니다. 하락 방향으로 추세가 강하게 터지는 매우 위험한 구간입니다.',
-  failed_box_breakout: '박스권 상단을 돌파하는 듯 했으나 이내 밀려 내려왔습니다. 매물대 저항이 강하여 돌파에 실패한 실망 매물이 나올 수 있습니다.',
-  low_per: '주가수익비율(PER)이 낮다는 것은 회사가 벌어들이는 이익에 비해 주가가 싼 편이라는 뜻입니다. 가치투자 관점에서 긍정적인 베이스 조건이 됩니다.',
-  reasonable_per: 'PER이 과열되지 않고 적정한 수준에 머물러 있어, 현재의 주가가 실적에 의해 어느 정도 정당화될 수 있음을 의미합니다.',
-  low_pbr: '주가순자산비율(PBR)이 낮아 회사의 자산(청산가치) 대비 주가가 싸게 거래되고 있음을 의미합니다. 주가가 떨어지더라도 하방을 지지해주는 방어력이 좋습니다.',
-  operating_profit_growing: '회사의 영업이익이 꾸준히 성장하고 있습니다. 기업의 본질적인 이익 창출 능력이 좋아지고 있으므로 장기적인 주가 상승의 근본적인 원동력이 됩니다.',
-  chikou_below_past_price: '후행스팬이 과거 주가 아래에 머물러 있습니다. 상승 추세가 아직 불완전하거나 여전히 강한 매도 압력이 남아있음을 의미합니다.',
-};
-
-function getReasonExplanation(value) {
-  const key = String(value || '').toLowerCase();
-  const normalizedKey = normalizedReasonKey(key);
-  
-  // Try exact match
-  if (reasonExplanations[key]) return reasonExplanations[key];
-  if (reasonExplanations[normalizedKey]) return reasonExplanations[normalizedKey];
-  
-  // Try matching prefixes or postfixes for generic fallbacks
-  if (key.includes('squeeze') && key.includes('release')) return reasonExplanations.bollinger_state_squeeze_release_up;
-  if (key.includes('squeeze')) return reasonExplanations.bollinger_state_squeeze;
-  if (key.includes('volume') && key.includes('breakout')) return reasonExplanations.price_breakout_with_relative_volume;
-  if (key.includes('per') && key.includes('low')) return reasonExplanations.low_per;
-  if (key.includes('pbr') && key.includes('low')) return reasonExplanations.low_pbr;
-  if (key.includes('cloud') && key.includes('above')) return reasonExplanations.ichimoku_price_above_cloud;
-  if (key.includes('cloud') && key.includes('bearish')) return reasonExplanations.ichimoku_forward_cloud_bearish;
-  
-  return '이 조건은 다수의 기술적 분석 지표가 가리키는 현재의 시장 상황을 요약한 것입니다. 여러 근거가 겹칠수록 해당 추세의 신뢰도가 높아집니다.';
-}
-
-
-function publicStateLabel(state) {
-  const normalized = String(state || 'NEUTRAL').toUpperCase();
-  const labels = {
-    BULLISH: '상승 조건 우세',
-    BEARISH: '약세 조건 주의',
-    NEUTRAL: '중립 · 추적',
-    SQUEEZE_RELEASE_UP: '수축 후 상방 확장',
-    SQUEEZE: '변동성 수축',
-    BREAKOUT_CONFIRMED: '돌파 · 거래량 확인',
-    VALUED: '가치 참고 조건 충족',
-  };
-  return labels[normalized] || normalized.replaceAll('_', ' ');
-}
-
-function publicStateExplanation(key, state) {
-  const normalized = String(state || '').toUpperCase();
-  if (key === 'ichimoku' && normalized === 'BULLISH') return '구름대 위 위치와 전환선·기준선 관계가 추세 환경을 뒷받침합니다. 다만 선행 구름 방향처럼 엇갈린 조건도 함께 확인합니다.';
-  if (key === 'bollinger' && normalized === 'SQUEEZE_RELEASE_UP') return '변동성이 줄었던 뒤 밴드가 위쪽으로 넓어지는 모습입니다. 확장이 지속되는지는 다른 지표와 거래량 조건을 함께 봅니다.';
-  if (key === 'volume' && normalized === 'BREAKOUT_CONFIRMED') return '가격 움직임에 상대 거래량 확인이 동반된 상태입니다. 거래량이 줄어들면 이 조건의 신뢰도도 다시 점검합니다.';
-  if (key === 'valuation' && normalized === 'VALUED') return '가치 참고 조건은 기술지표 판단을 보조합니다. 단독으로 방향을 결정하지 않으며, 추세·모멘텀 조건과 함께 사용합니다.';
-  if ((key === 'maSupport' || key === 'rsi') && normalized === 'NEUTRAL') return '현재는 뚜렷하게 한 방향을 지지하지 않아, 다음 분석 갱신에서 회복 또는 약화 여부를 추가 확인하는 상태입니다.';
-  return publicStateNarrative(key, state);
-}
-
-function isCautionReason(value) {
-  return /(below|bearish|breakdown|lacks|downside|risk|lower)/.test(normalizedReasonKey(value));
-}
-
-function AnalysisContentsRail({ sections }) {
-  const moveToSection = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  return (
-    <nav className="analysis-contents-rail" aria-label="분석 목차">
-      <div className="analysis-contents-drawer">
-        <span className="analysis-contents-tab">목차</span>
-        <div className="analysis-contents-menu">
-          <p>분석 목차</p>
-          {sections.map((section, index) => <button key={section.id} type="button" onClick={() => moveToSection(section.id)}><span>{String(index + 1).padStart(2, '0')}</span><strong>{section.label}</strong><small>{section.description}</small></button>)}
-        </div>
-      </div>
-    </nav>
-  );
-}
-const publicIndicatorGuides = {
-  bollinger: { label: '볼린저밴드', focus: '최근 변동성의 수축·확장과 밴드 안팎의 위치를 함께 해석합니다.' },
-  maSupport: { label: '이동평균선', focus: '중장기 추세선 위에서 지지되는지와 전환 여부를 해석합니다.' },
-  ichimoku: { label: '일목균형표', focus: '구름대와 전환선·기준선의 상대적 위치로 추세 환경을 해석합니다.' },
-  rsi: { label: 'RSI', focus: '힘의 회복·약화와 과열·침체 구간을 해석합니다.' },
-  volume: { label: '거래량 확인', focus: '가격 움직임을 뒷받침하는 참여 강도를 확인합니다.' },
-  valuation: { label: '가치 참고값', focus: '재무 참고값을 기술지표 판단의 보조 정보로만 사용합니다.' },
-};
-
-function publicStateNarrative(key, state) {
-  const normalized = String(state || '').toUpperCase();
-  if (key === 'bollinger' && normalized.includes('SQUEEZE_RELEASE_UP')) return '변동성이 좁아진 뒤 상방 확장 조건이 포착됐습니다. 다른 지표의 확인 여부를 함께 봅니다.';
-  if (key === 'bollinger' && normalized.includes('SQUEEZE')) return '변동성은 줄었지만 아직 방향이 충분히 확정되지 않은 상태로 해석합니다.';
-  if (key === 'bollinger' && normalized.includes('LOWER')) return '하단 밴드 쪽 압력이 감지되어 반등 확인 전까지는 방어적으로 해석합니다.';
-  if (key === 'maSupport' && normalized.includes('ABOVE')) return '중장기 이동평균선 위의 지지 조건이 유지되는지 확인합니다.';
-  if (key === 'maSupport' && normalized.includes('BELOW')) return '중장기 이동평균선 아래로 약화된 조건이어서 추세 회복을 추가 확인합니다.';
-  if (key === 'ichimoku' && normalized.includes('ABOVE')) return '구름대 위 환경으로 분류되어 추세 조건에는 우호적인 신호로 해석합니다.';
-  if (key === 'ichimoku' && normalized.includes('BELOW')) return '구름대 아래 환경으로 분류되어 반등보다 위험 관리 조건을 우선 확인합니다.';
-  if (key === 'rsi' && (normalized.includes('RECOVERY') || normalized.includes('ABOVE'))) return '모멘텀이 회복되는지 확인하는 조건입니다. 단독 신호로 결론 내리지 않습니다.';
-  if (key === 'rsi' && (normalized.includes('BREAK') || normalized.includes('WEAK'))) return '모멘텀이 약해지는 조건으로, 다른 지표의 방어 신호와 함께 해석합니다.';
-  return publicIndicatorGuides[key]?.focus || '이 지표의 상태와 다른 기술 조건의 일치 여부를 함께 해석합니다.';
-}
 
 function publicConclusion(stock) {
-  if (stock.riskState === 'defensive') return '방어 신호가 우세합니다. 상승 가능성을 단정하기보다 약화 요인과 추세 회복 여부를 우선 점검한 결과입니다.';
-  if (stock.confidence >= 70) return '여러 기술 조건이 같은 방향을 가리켜 관심 조건으로 분류됐습니다. 이는 교육용 해석이며 매수 권유가 아닙니다.';
+  if (stock.riskState === 'defensive') return '주의 조건의 비중이 높습니다. 이후 방향을 단정하지 않고 약화 요인과 다음 확정 일봉의 변화를 함께 확인해야 합니다.';
+  if (stock.confidence >= 70) return '여러 기술 조건의 일치도가 상대적으로 높게 계산됐습니다. 이는 과거·현재 조건의 요약이며 미래 가격 방향이나 수익을 예측하지 않습니다.';
   if (stock.riskState === 'watch') return '긍정·주의 조건이 함께 나타나 관찰 대상으로 분류됐습니다. 추가 확인이 쌓일 때까지 방향을 단정하지 않습니다.';
   return '현재 조건은 뚜렷한 방향성을 확정하기보다 중립적으로 추적하는 구간으로 해석했습니다.';
 }
@@ -583,27 +443,64 @@ function sortValue(signal, mode) {
 }
 
 async function loadSignalsFromFirestore({ admin = false } = {}) {
-  if (!firebaseReady || !db) return [];
-  if (!admin && !publicLiveDataApproved) return [];
-  const sourceCollection = admin ? 'meta_data' : 'public_analysis_meta';
-  const expectedPrefix = admin ? 'meta_v2_' : 'public_meta_v2_';
-  const metaQuery = query(collection(db, sourceCollection), where('market', 'in', ['KR', 'US']));
-  const metaSnap = await getDocs(metaQuery);
-  const chunks = [];
-  metaSnap.forEach((item) => { const data = item.data(); if (Array.isArray(data.list) && String(item.id).startsWith(expectedPrefix)) chunks.push({ id: item.id, ...data }); });
-  const expectedVersion = admin ? 'V2' : 'V2_PUBLIC';
-  const v2Chunks = chunks.filter((chunk) => chunk.strategyVersion === expectedVersion);
-  let rows = [];
-  (v2Chunks.length > 0 ? v2Chunks : chunks).forEach((chunk) => { rows = rows.concat(chunk.list || []); });
-  rows.sort((a, b) => Number(b.confidenceScore || 0) - Number(a.confidenceScore || 0));
+  if (!firebaseReady || !db) return { signals: [], manifests: {}, loadedPages: [] };
+  if (!admin && !publicLiveDataApproved) return { signals: [], manifests: {}, loadedPages: [] };
+  if (admin) {
+    const metaQuery = query(collection(db, 'meta_data'), where('market', '==', 'KR'));
+    const metaSnap = await getDocs(metaQuery);
+    let rows = [];
+    metaSnap.forEach((item) => {
+      const data = item.data();
+      if (data.strategyVersion === 'V2' && Array.isArray(data.list) && item.id.startsWith('meta_v2_')) rows = rows.concat(data.list);
+    });
+    rows.sort((a, b) => Number(b.confidenceScore || 0) - Number(a.confidenceScore || 0));
+    return { signals: rows.map(mapStockPayload), manifests: {}, loadedPages: [] };
+  }
+
+  const markets = ['KR'];
+  const manifestSnapshots = await Promise.all(markets.map((market) => getDoc(doc(db, 'public_analysis_meta', `public_meta_v2_${market}_manifest`))));
+  const manifests = {};
+  manifestSnapshots.forEach((snapshot, index) => {
+    if (snapshot.exists() && snapshot.data()?.strategyVersion === 'V2_PUBLIC_MANIFEST') manifests[markets[index]] = snapshot.data();
+  });
+  const pageKeys = Object.keys(manifests).map((market) => `${market}:0`);
+  return {
+    signals: await loadPublicPageKeys(pageKeys),
+    manifests,
+    loadedPages: pageKeys,
+  };
+}
+
+const developmentSignals = import.meta.env.DEV ? mockSignals.map(mapStockPayload) : [];
+
+async function loadPublicPageKeys(pageKeys) {
+  if (!firebaseReady || !db || !publicLiveDataApproved || pageKeys.length === 0) return [];
+  const snapshots = await Promise.all(pageKeys.map((key) => {
+    const [market, page] = key.split(':');
+    return getDoc(doc(db, 'public_analysis_meta', `public_meta_v2_${market}_${page}`));
+  }));
+  const rows = [];
+  snapshots.forEach((snapshot) => {
+    const data = snapshot.exists() ? snapshot.data() : null;
+    if (data?.strategyVersion === 'V2_PUBLIC' && Array.isArray(data.list)) rows.push(...data.list);
+  });
   return rows.map(mapStockPayload);
+}
+
+function mergeSignals(current, incoming) {
+  const merged = new Map(current.map((signal) => [signal.id, signal]));
+  incoming.forEach((signal) => merged.set(signal.id, signal));
+  return [...merged.values()];
 }
 async function loadOrdersFromFirestore(allowLiveData = false) {
   if (!allowLiveData || !firebaseReady || !db) return [];
-  const ordersQuery = query(collection(db, 'rebalance_orders'), where('market', 'in', ['KR', 'US']));
+  const ordersQuery = query(collection(db, 'rebalance_orders'), orderBy('updatedAt', 'desc'), limit(200));
   const snap = await getDocs(ordersQuery);
   const rows = [];
-  snap.forEach((item) => rows.push({ id: item.id, ...item.data() }));
+  snap.forEach((item) => {
+    const data = item.data();
+    if (data.market === 'KR') rows.push({ id: item.id, ...data });
+  });
   rows.sort((a, b) => Number(b.tradeAmount || 0) - Number(a.tradeAmount || 0));
   return rows.map((order) => ({
     time: formatTimestamp(order.updatedAt),
@@ -618,15 +515,11 @@ async function loadOrdersFromFirestore(allowLiveData = false) {
 
 async function loadTradeLogsFromFirestore() {
   if (!firebaseReady || !db) return [];
-  const snap = await getDocs(collection(db, 'bot_trade_logs'));
+  const logsQuery = query(collection(db, 'bot_trade_logs'), orderBy('createdAt', 'desc'), limit(120));
+  const snap = await getDocs(logsQuery);
   const rows = [];
   snap.forEach((item) => rows.push({ id: item.id, ...item.data() }));
-  rows.sort((a, b) => {
-    const aDate = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
-    const bDate = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
-    return bDate.getTime() - aDate.getTime();
-  });
-  return rows.slice(0, 120).map((log) => ({
+  return rows.map((log) => ({
     time: formatTimestamp(log.createdAt),
     code: log.code,
     name: log.name || log.code,
@@ -716,8 +609,29 @@ function areaPath(rows, topKey, bottomKey, xForIndex, yForValue) {
   return `M ${top.join(' L ')} L ${bottom.join(' L ')} Z`;
 }
 
-function WatchlistAd() {
-  return <AdSenseSlot title="목록 광고" compact className="watchlist-ad-slot adsense-watchlist-slot" />;
+function SupportCard() {
+  const configuredUrl = String(import.meta.env.VITE_SUPPORT_URL || '').trim();
+  const supportUrl = configuredUrl.startsWith('https://') ? configuredUrl : '';
+
+  return (
+    <aside className="support-card" aria-label="자발적 사이트 운영 후원">
+      <div className="support-card-copy">
+        <Coffee size={22} aria-hidden="true" />
+        <div>
+          <span>자발적 운영 후원</span>
+          <strong>사이트가 도움이 됐다면 커피 한 잔으로 응원할 수 있어요.</strong>
+          <small>후원 여부와 관계없이 공개 정보는 동일하며, 개별 상담·추가 분석·우선 열람은 제공하지 않습니다.</small>
+        </div>
+      </div>
+      {supportUrl ? (
+        <a className="support-card-button" href={supportUrl} target="_blank" rel="noopener noreferrer">
+          커피 한 잔 후원하기 <ExternalLink size={14} aria-hidden="true" />
+        </a>
+      ) : (
+        <span className="support-card-button disabled" aria-disabled="true">후원 링크 준비 중</span>
+      )}
+    </aside>
+  );
 }
 function IndicatorToggle({ active, label, onClick }) {
   return (
@@ -933,275 +847,34 @@ function ScoreDock({ stock }) {
     );
   }
 
-const Candle = ({ x, o, c, h, l }) => {
-  const isUp = c <= o; // Y axis is inverted, so smaller Y means higher price
-  const color = isUp ? '#ef4444' : '#3b82f6';
-  const top = Math.min(o, c);
-  const bottom = Math.max(o, c);
-  const height = Math.max(bottom - top, 2);
-  return (
-    <g stroke={color}>
-      <line x1={x} y1={h} x2={x} y2={l} strokeWidth="1.5" />
-      <rect x={x - 3} y={top} width="6" height={height} fill={color} strokeWidth="1" stroke="none" />
-    </g>
-  );
-};
 
-const educationalGuides = {
-  bollinger: {
-    title: '볼린저 밴드 (Bollinger Bands)',
-    points: [
-      { 
-        label: '스퀴즈 돌파 (+90점)', 
-        desc: '밴드가 좁게 횡보(힘 응축)하다가, 상단 밴드를 강하게 뚫고 밴드가 상하로 넓어지는(발산) 강력한 상승 신호입니다.',
-        graphic: (
-          <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
-            <path d="M 10,70 L 120,70 Q 180,70 280,40" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeDasharray="3,3" />
-            <path d="M 10,50 L 120,50 Q 180,50 280,10" fill="none" stroke="var(--text-soft)" strokeWidth="1.5" />
-            <path d="M 10,90 L 120,90 Q 180,90 280,110" fill="none" stroke="var(--text-soft)" strokeWidth="1.5" />
-            <Candle x={30} h={55} l={85} o={75} c={65} />
-            <Candle x={60} h={60} l={80} o={65} c={75} />
-            <Candle x={90} h={50} l={80} o={75} c={55} />
-            <Candle x={120} h={45} l={60} o={55} c={48} />
-            <Candle x={150} h={25} l={50} o={48} c={32} />
-            <Candle x={180} h={10} l={40} o={32} c={15} />
-            <Candle x={210} h={5} l={30} o={20} c={10} />
-            <Candle x={240} h={10} l={25} o={12} c={22} />
-            <text x="160" y="25" fontSize="12" fill="#ef4444" fontWeight="bold">상단선 돌파(발산)</text>
-            <text x="10" y="45" fontSize="11" fill="var(--text-soft)">상단밴드</text>
-            <text x="10" y="65" fontSize="11" fill="var(--text-soft)">중심선(MA20)</text>
-            <text x="10" y="105" fontSize="11" fill="var(--text-soft)">하단밴드</text>
-          </svg>
-        )
-      },
-      { 
-        label: '단순 수축 (+35점)', 
-        desc: '볼린저 밴드의 상단과 하단 폭이 좁아지며 가격이 중심선 부근에서 횡보하는 상태입니다. 곧 큰 변동이 올 수 있습니다.',
-        graphic: (
-          <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
-            <path d="M 10,40 Q 150,60 280,60" fill="none" stroke="var(--text-soft)" strokeWidth="1.5" />
-            <path d="M 10,60 Q 150,70 280,70" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeDasharray="3,3" />
-            <path d="M 10,80 Q 150,80 280,80" fill="none" stroke="var(--text-soft)" strokeWidth="1.5" />
-            <Candle x={40} h={30} l={70} o={45} c={65} />
-            <Candle x={80} h={40} l={75} o={65} c={50} />
-            <Candle x={120} h={50} l={80} o={50} c={70} />
-            <Candle x={160} h={55} l={85} o={70} c={65} />
-            <Candle x={200} h={60} l={80} o={65} c={75} />
-            <Candle x={240} h={62} l={78} o={75} c={68} />
-            <text x="150" y="45" fontSize="12" fill="var(--text)" fontWeight="bold">밴드폭 축소(수축)</text>
-          </svg>
-        )
-      },
-      { 
-        label: '하단 붕괴 (-45점)', 
-        desc: '하단 밴드를 깨고 내려가며 밴드가 넓어지는 패턴입니다. 강한 하락 추세가 시작될 수 있어 주의해야 합니다.',
-        graphic: (
-          <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
-            <path d="M 10,50 L 120,50 Q 180,50 280,20" fill="none" stroke="var(--text-soft)" strokeWidth="1.5" />
-            <path d="M 10,70 L 120,70 Q 180,70 280,85" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeDasharray="3,3" />
-            <path d="M 10,90 L 120,90 Q 180,90 280,115" fill="none" stroke="var(--text-soft)" strokeWidth="1.5" />
-            <Candle x={40} h={55} l={85} o={75} c={65} />
-            <Candle x={80} h={50} l={80} o={65} c={75} />
-            <Candle x={120} h={65} l={85} o={75} c={82} />
-            <Candle x={160} h={75} l={100} o={82} c={95} />
-            <Candle x={200} h={85} l={110} o={95} c={105} />
-            <Candle x={240} h={95} l={115} o={105} c={110} />
-            <text x="160" y="112" fontSize="12" fill="#3b82f6" fontWeight="bold">하단선 이탈(폭락)</text>
-          </svg>
-        )
-      },
-      { 
-        label: '돌파 실패 (-25점)', 
-        desc: '상단 밴드를 넘었다가 안착하지 못하고 다시 밴드 안쪽(중심선 방향)으로 밀려나는 패턴입니다.',
-        graphic: (
-          <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
-            <path d="M 10,50 Q 80,45 150,50 Q 220,55 280,50" fill="none" stroke="var(--text-soft)" strokeWidth="1.5" />
-            <path d="M 10,70 Q 150,70 280,70" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeDasharray="3,3" />
-            <path d="M 10,90 Q 150,90 280,90" fill="none" stroke="var(--text-soft)" strokeWidth="1.5" />
-            <Candle x={40} h={55} l={85} o={75} c={60} />
-            <Candle x={80} h={35} l={70} o={60} c={40} />
-            <Candle x={120} h={25} l={50} o={40} c={30} />
-            <Candle x={160} h={30} l={65} o={30} c={60} />
-            <Candle x={200} h={45} l={75} o={60} c={70} />
-            <Candle x={240} h={65} l={85} o={70} c={80} />
-            <text x="150" y="25" fontSize="12" fill="#3b82f6" fontWeight="bold">돌파 후 밴드 안으로 하락</text>
-          </svg>
-        )
-      }
-    ]
-  },
-  maSupport: {
-    title: '이동평균선 지지 (MA Support)',
-    points: [
-      { 
-        label: '골든크로스 안착 (+90점)', 
-        desc: '단기 이동평균선(또는 주가)이 60일 장기 추세선을 강하게 뚫고 올라가(골든크로스) 지지를 받는 상태입니다.',
-        graphic: (
-          <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
-            <path d="M 10,90 L 280,50" fill="none" stroke="var(--accent-purple, #8b5cf6)" strokeWidth="2.5" />
-            <path d="M 10,110 Q 120,100 160,40 Q 200,60 280,20" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeDasharray="3,3" />
-            <Candle x={40} h={100} l={115} o={110} c={105} />
-            <Candle x={80} h={80} l={110} o={105} c={85} />
-            <Candle x={120} h={50} l={90} o={85} c={60} />
-            <Candle x={160} h={40} l={65} o={60} c={45} />
-            <Candle x={200} h={40} l={60} o={45} c={55} />
-            <Candle x={240} h={20} l={55} o={55} c={25} />
-            <text x="180" y="80" fontSize="12" fill="#ef4444" fontWeight="bold">장기선 위 안착(지지)</text>
-            <text x="10" y="80" fontSize="11" fill="var(--accent-purple, #8b5cf6)">60일선(장기)</text>
-            <text x="10" y="105" fontSize="11" fill="var(--text-soft)">20일선(단기)</text>
-          </svg>
-        )
-      },
-      { 
-        label: '장기선 위 유지 (+70점)', 
-        desc: '주가가 장기선 위에서 꾸준히 지지를 받으며 추세가 꺾이지 않고 편안하게 상승하는 상태입니다.',
-        graphic: (
-          <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
-            <path d="M 10,100 L 280,70" fill="none" stroke="var(--accent-purple, #8b5cf6)" strokeWidth="2.5" />
-            <Candle x={40} h={40} l={75} o={50} c={65} />
-            <Candle x={80} h={55} l={85} o={65} c={75} />
-            <Candle x={120} h={70} l={95} o={75} c={90} />
-            <Candle x={160} h={55} l={90} o={90} c={65} />
-            <Candle x={200} h={35} l={75} o={65} c={45} />
-            <Candle x={240} h={25} l={60} o={45} c={30} />
-            <text x="10" y="90" fontSize="11" fill="var(--accent-purple, #8b5cf6)">60일선(장기)</text>
-            <text x="100" y="110" fontSize="12" fill="#ef4444" fontWeight="bold">장기선 터치 후 반등</text>
-          </svg>
-        )
-      },
-      { 
-        label: '데드크로스 붕괴 (-35점)', 
-        desc: '지켜주던 장기 지지선이 뚫려 아래로 내려간 위험 상태입니다. 추세가 하락으로 꺾일 수 있습니다.',
-        graphic: (
-          <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
-            <path d="M 10,70 L 280,60" fill="none" stroke="var(--accent-purple, #8b5cf6)" strokeWidth="2.5" />
-            <Candle x={40} h={30} l={65} o={50} c={40} />
-            <Candle x={80} h={35} l={70} o={40} c={55} />
-            <Candle x={120} h={50} l={85} o={55} c={75} />
-            <Candle x={160} h={70} l={100} o={75} c={90} />
-            <Candle x={200} h={85} l={110} o={90} c={105} />
-            <text x="10" y="60" fontSize="11" fill="var(--accent-purple, #8b5cf6)">60일선(장기)</text>
-            <text x="140" y="45" fontSize="12" fill="#3b82f6" fontWeight="bold">지지선 붕괴(하락)</text>
-          </svg>
-        )
-      }
-    ]
-  },
-  ichimoku: {
-    title: '일목균형표 (Ichimoku Cloud)',
-    points: [
-      { 
-        label: '구름대 위 (+35점)', 
-        desc: '두꺼운 저항대인 구름을 뚫고 올라가 주가 상승에 방해물이 적은 편안한 상승 구간입니다.',
-        graphic: (
-          <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
-            <path d="M 10,80 Q 150,70 280,60 L 280,110 Q 150,100 10,120 Z" fill="rgba(16,185,129,0.15)" stroke="rgba(16,185,129,0.5)" strokeWidth="1" />
-            <Candle x={40} h={40} l={70} o={60} c={45} />
-            <Candle x={90} h={45} l={65} o={45} c={55} />
-            <Candle x={140} h={30} l={60} o={55} c={35} />
-            <Candle x={190} h={20} l={50} o={35} c={25} />
-            <Candle x={240} h={15} l={40} o={25} c={30} />
-            <text x="110" y="30" fontSize="12" fill="#ef4444" fontWeight="bold">구름 저항대 위 (상승 추세)</text>
-            <text x="10" y="100" fontSize="11" fill="#10b981">양운(지지구름)</text>
-          </svg>
-        )
-      },
-      { 
-        label: '구름대 아래 (-35점)', 
-        desc: '두꺼운 구름이 머리 위에서 짓누르고 있어 돌파하기 힘든 하락/정체 구간입니다.',
-        graphic: (
-          <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
-            <path d="M 10,20 Q 150,40 280,30 L 280,70 Q 150,80 10,60 Z" fill="rgba(239,68,68,0.15)" stroke="rgba(239,68,68,0.5)" strokeWidth="1" />
-            <Candle x={40} h={70} l={90} o={75} c={85} />
-            <Candle x={90} h={65} l={100} o={85} c={70} />
-            <Candle x={140} h={70} l={95} o={70} c={85} />
-            <Candle x={190} h={80} l={110} o={85} c={100} />
-            <Candle x={240} h={95} l={120} o={100} c={110} />
-            <text x="120" y="100" fontSize="12" fill="#3b82f6" fontWeight="bold">두꺼운 저항(구름)에 막힘</text>
-            <text x="10" y="45" fontSize="11" fill="#ef4444">음운(저항구름)</text>
-          </svg>
-        )
-      },
-      { 
-        label: '전환선 호전 (+25점)', 
-        desc: '주가 흐름에 가장 민감한 전환선(단기선)이 기준선(중기선)을 뚫고 올라가 단기 상승 에너지가 강해진 상태입니다.',
-        graphic: (
-          <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
-            <path d="M 10,80 L 280,60" fill="none" stroke="var(--text-soft)" strokeWidth="2" strokeDasharray="3,3" />
-            <path d="M 10,100 Q 100,90 140,50 L 280,30" fill="none" stroke="var(--accent)" strokeWidth="2" />
-            <Candle x={40} h={80} l={105} o={95} c={85} />
-            <Candle x={100} h={50} l={85} o={85} c={60} />
-            <Candle x={160} h={30} l={60} o={60} c={40} />
-            <Candle x={220} h={25} l={45} o={40} c={35} />
-            <text x="10" y="75" fontSize="11" fill="var(--text-soft)">기준선(중기선)</text>
-            <text x="160" y="25" fontSize="12" fill="#ef4444" fontWeight="bold">전환선(단기) 돌파</text>
-          </svg>
-        )
-      }
-    ]
-  },
-  rsi: {
-    title: 'RSI (상대강도지수)',
-    points: [
-      { 
-        label: '기준선 50 돌파 (+55점)', 
-        desc: '50을 넘었다는 것은 매도세보다 매수세가 강해졌음을 의미하며, 중요한 상승 추세 전환 신호입니다.',
-        graphic: (
-          <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
-            <line x1="0" y1="20" x2="300" y2="20" stroke="var(--negative-muted)" strokeWidth="1" strokeDasharray="3,3" />
-            <line x1="0" y1="60" x2="300" y2="60" stroke="var(--text-soft)" strokeWidth="1.5" strokeDasharray="4,4" />
-            <line x1="0" y1="100" x2="300" y2="100" stroke="var(--positive-muted)" strokeWidth="1" strokeDasharray="3,3" />
-            <path d="M 10,90 Q 70,80 120,60 Q 180,30 280,40" fill="none" stroke="#ef4444" strokeWidth="2.5" />
-            <circle cx="120" cy="60" r="5" fill="#ef4444" />
-            <text x="10" y="55" fontSize="11" fill="var(--text-soft)">50 (기준선)</text>
-            <text x="130" y="80" fontSize="12" fill="#ef4444" fontWeight="bold">50 상향 돌파 (매수 우위)</text>
-          </svg>
-        )
-      },
-      { 
-        label: '과매도권 회복 (+35점)', 
-        desc: '주가가 지나치게 빠져 RSI가 30 이하로 내려갔다가, 다시 30을 회복할 때 나오는 단기 반등 신호입니다.',
-        graphic: (
-          <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
-            <line x1="0" y1="20" x2="300" y2="20" stroke="var(--negative-muted)" strokeWidth="1" strokeDasharray="3,3" />
-            <line x1="0" y1="60" x2="300" y2="60" stroke="var(--text-soft)" strokeWidth="1" strokeDasharray="4,4" />
-            <line x1="0" y1="100" x2="300" y2="100" stroke="var(--positive-muted)" strokeWidth="2" strokeDasharray="3,3" />
-            <path d="M 10,80 L 80,115 L 140,95 L 200,80 L 280,65" fill="none" stroke="#ef4444" strokeWidth="2.5" />
-            <circle cx="140" cy="95" r="5" fill="#ef4444" />
-            <text x="10" y="95" fontSize="11" fill="var(--text-soft)">30 (침체)</text>
-            <text x="150" y="110" fontSize="12" fill="#ef4444" fontWeight="bold">30선 회복 (과매도 탈출)</text>
-          </svg>
-        )
-      },
-      { 
-        label: '추세 이탈 (-35점)', 
-        desc: '매수세가 꺾이며 RSI가 50 아래로 내려갈 때 나타나는 하락 전환 신호입니다.',
-        graphic: (
-          <svg viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
-            <line x1="0" y1="20" x2="300" y2="20" stroke="var(--negative-muted)" strokeWidth="1" strokeDasharray="3,3" />
-            <line x1="0" y1="60" x2="300" y2="60" stroke="var(--text-soft)" strokeWidth="2" strokeDasharray="4,4" />
-            <line x1="0" y1="100" x2="300" y2="100" stroke="var(--positive-muted)" strokeWidth="1" strokeDasharray="3,3" />
-            <path d="M 10,40 Q 80,45 130,60 Q 200,80 280,105" fill="none" stroke="#3b82f6" strokeWidth="2.5" />
-            <circle cx="130" cy="60" r="5" fill="#3b82f6" />
-            <text x="140" y="55" fontSize="12" fill="#3b82f6" fontWeight="bold">50 하향 돌파 (추세 꺾임)</text>
-          </svg>
-        )
-      }
-    ]
-  }
-};
+function useModalBehavior(onClose) {
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [onClose]);
+}
 
 function DisclaimerModal({ onClose }) {
+  useModalBehavior(onClose);
   return (
-    <div className="modal-backdrop" onClick={onClose} style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-      <div className="modal-content" onClick={e => e.stopPropagation()} style={{background: 'var(--panel-bg, #ffffff)', padding: '28px', borderRadius: '16px', maxWidth: '520px', width: '90%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 10px 25px rgba(0,0,0,0.1)'}}>
-        <h3 style={{marginTop: 0, fontSize: '18px'}}>서비스 이용 면책 조항</h3>
-        <p style={{fontSize: '13px', lineHeight: '1.6', color: 'var(--text-soft)'}}>
-          본 웹사이트는 정식 금융투자업자나 유사투자자문업자가 아니며, 특정 종목의 매수·매도·보유를 권유하지 않습니다.<br/><br/>
-          제공되는 모든 지표와 스코어는 자동화된 알고리즘에 의한 객관적 산출물로 미래의 수익을 보장하지 않으며, 어떠한 1:1 투자 자문도 제공하지 않습니다.<br/><br/>
-          제공된 정보는 참고용일 뿐이며, 모든 투자 판단과 그에 따른 최종적인 책임은 전적으로 투자자 본인에게 있습니다.
-        </p>
-        <button onClick={onClose} style={{marginTop: '16px', padding: '10px 16px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', width: '100%'}}>확인</button>
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <div className="modal-content modal-content--disclaimer" role="dialog" aria-modal="true" aria-labelledby="disclaimer-modal-title" onClick={e => e.stopPropagation()}>
+        <div className="modal-header"><h3 id="disclaimer-modal-title">서비스 이용 안내</h3></div>
+        <div className="modal-body"><p>
+          이 서비스는 기술지표를 이해하기 위한 학습 정보를 제공하며, 개인별 투자 상담이나 특정 종목의 매수·매도·보유 권유를 제공하지 않습니다.<br/><br/>
+          화면의 점수와 해설은 최근 거래일의 확정 일봉에서 계산한 기술적 조건을 정리한 결과이며, 미래 가격이나 수익을 보장하지 않습니다.<br/><br/>
+          이 정보를 실제 투자에 활용할지는 이용자가 스스로 판단해야 합니다.
+        </p></div>
+        <div className="modal-actions"><button type="button" onClick={onClose} className="auth-button">확인</button></div>
       </div>
     </div>
   );
@@ -1209,25 +882,23 @@ function DisclaimerModal({ onClose }) {
 
 function EducationalGuideModal({ guideKey, onClose }) {
   const guide = educationalGuides[guideKey];
+  useModalBehavior(onClose);
   if (!guide) return null;
   return (
-    <div className="modal-backdrop" onClick={onClose} style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-      <div className="modal-content" onClick={e => e.stopPropagation()} style={{background: 'var(--panel-bg, #ffffff)', padding: '28px', borderRadius: '16px', maxWidth: '520px', width: '90%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 10px 25px rgba(0,0,0,0.1)'}}>
-        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px'}}>
-          <h3 style={{margin: 0, fontSize: '18px', color: 'var(--text)'}}>{guide.title} 읽는 법</h3>
-          <button onClick={onClose} style={{background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex'}}><X size={20} /></button>
-        </div>
-        <p style={{fontSize: '13.5px', color: 'var(--text-soft)', marginBottom: '24px', lineHeight: '1.5'}}>이 지표에서 자주 나타나는 패턴과 기준 점수입니다. 캔들과 지표 선의 움직임을 자세히 확인해 보세요.</p>
-        <div style={{display: 'flex', flexDirection: 'column', gap: '20px'}}>
-          {guide.points.map((pt, i) => (
-            <div key={i} style={{background: 'var(--surface-sunken, #f8fafc)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)'}}>
-              <strong style={{display: 'block', fontSize: '16px', marginBottom: '8px', color: 'var(--text)'}}>{pt.label}</strong>
-              <p style={{margin: '0 0 16px 0', fontSize: '13.5px', color: 'var(--text-soft)', lineHeight: '1.5'}}>{pt.desc}</p>
-              <div style={{width: '100%', height: '140px', background: 'var(--app-bg, #ffffff)', borderRadius: '8px', border: '1px solid var(--border)', padding: '10px', boxSizing: 'border-box'}}>
-                {pt.graphic}
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <div className="modal-content modal-content--guide" role="dialog" aria-modal="true" aria-labelledby="guide-modal-title" onClick={e => e.stopPropagation()}>
+        <div className="modal-header"><h3 id="guide-modal-title">{guide.title} {educationUiCopy.guideTitleSuffix}</h3><button type="button" onClick={onClose} className="modal-close" aria-label="설명 닫기"><X size={20} /></button></div>
+        <div className="modal-body"><p>{educationUiCopy.guideIntro}</p>
+          <div className="guide-points">
+            {guide.points.map((pt, i) => (
+              <div key={i} className="guide-point">
+                <strong>{pt.label}</strong>
+                <p>{pt.desc}</p>
+                <div className="guide-graphic">{pt.graphic}</div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
+          <small className="modal-education-disclaimer"><strong>{educationUiCopy.disclaimerTitle}</strong>{educationUiCopy.disclaimerText}</small>
         </div>
       </div>
     </div>
@@ -1236,46 +907,49 @@ function EducationalGuideModal({ guideKey, onClose }) {
 
 function ReasonExplanationModal({ reasonKey, onClose }) {
   const label = publicReasonLabel(reasonKey);
-  const explanation = getReasonExplanation(reasonKey);
-  
+  const lesson = getReasonLesson(reasonKey);
+  const visual = getReasonGraphic(reasonKey);
+  useModalBehavior(onClose);
+
   return (
-    <div className="modal-backdrop" onClick={onClose} style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-      <div className="modal-content" onClick={e => e.stopPropagation()} style={{background: 'var(--panel-bg, #ffffff)', padding: '28px', borderRadius: '16px', maxWidth: '480px', width: '90%', boxShadow: '0 10px 25px rgba(0,0,0,0.1)'}}>
-        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px'}}>
-          <h3 style={{margin: 0, fontSize: '17px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '8px'}}>
-            <HelpCircle size={18} color="var(--accent, #3b82f6)" />
-            조건 상세 설명
-          </h3>
-          <button type="button" onClick={onClose} style={{background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex'}}><X size={20} /></button>
-        </div>
-        <div style={{background: 'var(--surface-sunken, #f8fafc)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border)', marginBottom: '16px'}}>
-          <strong style={{display: 'block', fontSize: '15px', marginBottom: '12px', color: 'var(--text)'}}>{label}</strong>
-          <p style={{margin: 0, fontSize: '14px', color: 'var(--text-soft)', lineHeight: '1.6'}}>{explanation}</p>
-        </div>
-        <button type="button" onClick={onClose} className="auth-button" style={{width: '100%', justifyContent: 'center'}}>확인</button>
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <div className="modal-content modal-content--reason" role="dialog" aria-modal="true" aria-labelledby="reason-modal-title" onClick={e => e.stopPropagation()}>
+        <div className="modal-header"><h3 id="reason-modal-title"><HelpCircle size={18} color="var(--accent, #3b82f6)" />{educationUiCopy.reasonModalTitle}</h3><button type="button" onClick={onClose} className="modal-close" aria-label="해설 닫기"><X size={20} /></button></div>
+        <div className="modal-body"><div className="reason-lesson">
+          <strong className="reason-lesson-title">{label}</strong>
+          {visual && (
+            <figure className="reason-lesson-graphic">
+              <figcaption>그림으로 읽어보기 · {visual.label}</figcaption>
+              <div className="reason-lesson-graphic-canvas" role="img" aria-label={`${label} 설명 그림`}>{visual.graphic}</div>
+            </figure>
+          )}
+          <section className="reason-lesson-section reason-lesson-section--meaning"><span>{educationUiCopy.reasonMeaningLabel}</span><p>{lesson.meaning}</p></section>
+          <section className="reason-lesson-section reason-lesson-section--interpretation"><span>{educationUiCopy.reasonInterpretationLabel}</span><p>{lesson.interpretation}</p></section>
+          <section className="reason-lesson-section reason-lesson-section--check"><span>{educationUiCopy.reasonCheckLabel}</span><p>{lesson.check}</p></section>
+          <small className="modal-education-disclaimer"><strong>{educationUiCopy.disclaimerTitle}</strong>{educationUiCopy.disclaimerText}</small>
+        </div></div>
+        <div className="modal-actions"><button type="button" onClick={onClose} className="auth-button">확인</button></div>
       </div>
     </div>
   );
 }
 
 function PublicAnalysisUnavailable({ message }) {
-  return (<section className="public-analysis-panel public-analysis-unavailable"><p>PUBLIC ANALYSIS FEED</p><h3>공개 분석 결과를 준비 중입니다.</h3><span>{message || '서버에서 가격 없는 분석 결과가 발행되면 이곳에 지표별 해석이 표시됩니다.'}</span></section>);
+  return (<section className="public-analysis-panel public-analysis-unavailable"><p>공공데이터 기반 기술지표 분석</p><h3>공개 분석을 준비 중입니다.</h3><span>{message || '다음 분석 결과가 게시되면 이곳에 지표별 해설이 표시됩니다.'}</span></section>);
 }
 
-function PublicAnalysisPanel({ stock }) {
+function PublicAnalysisPanel({ stock, compact = false }) {
   const [helpKey, setHelpKey] = useState(null);
   const [reasonKey, setReasonKey] = useState(null);
+  const [expandedIndicators, setExpandedIndicators] = useState(() => new Set());
   const reasons = Array.from(new Set([...(stock.raw?.confidenceReasons || stock.raw?.signal?.reasons || []), ...Object.values(stock.indicatorStates || {}).flatMap((state) => state?.reasons || [])].filter(Boolean))).slice(0, 16);
   const states = Object.entries(stock.indicatorStates || {}).filter(([, state]) => state?.state || (state?.reasons || []).length);
-  const components = stock.components.filter((component) => component.key !== 'penalty');
-  const componentByKey = Object.fromEntries(components.map((component) => [component.key, component]));
   const supportingReasons = reasons.filter((reason) => !isCautionReason(reason));
   const cautionReasons = reasons.filter(isCautionReason);
   const baseId = 'public-analysis-' + String(stock.id || stock.code || 'stock').replace(/[^a-zA-Z0-9_-]/g, '-');
   const sectionId = (suffix) => baseId + '-' + suffix;
   const sections = [
     { id: sectionId('overview'), label: '종합 해석', description: '현재 분류와 읽는 방법' },
-    { id: sectionId('scores'), label: '점수 구성', description: '지표별 기여도' },
     { id: sectionId('evidence'), label: '반영한 조건', description: '긍정·주의 근거' },
     { id: sectionId('indicators'), label: '지표별 해설', description: '상태와 추가 확인점' },
   ];
@@ -1284,7 +958,7 @@ function PublicAnalysisPanel({ stock }) {
     <section className="public-analysis-panel">
       <AnalysisContentsRail sections={sections} />
       <div className="public-analysis-header">
-        <div><p>REAL ANALYSIS · PRICE-FREE VIEW</p><h3>{stock.name}</h3><span>{stock.market}:{stock.code} · 분석 기준일 {stock.updatedAt}</span></div>
+        <div><p>공공데이터 기반 기술지표 분석</p><h3>{stock.name}</h3><span>{stock.market}:{stock.code} · 확정 일봉 기준 {stock.updatedAt}</span></div>
         <div className="public-status-stack"><strong className="glow-text">{formatNumber(stock.confidence, 1)}점</strong><span className={'risk-chip risk-' + stock.riskState}>{stock.label}</span></div>
       </div>
 
@@ -1296,18 +970,11 @@ function PublicAnalysisPanel({ stock }) {
           <article><span>뒷받침 조건</span><strong>{supportingReasons.length}개</strong><p>추세·변동성·거래량처럼 현재 해석을 지지하는 조건의 수입니다. 아래 근거에서 항목별 의미를 확인할 수 있습니다.</p></article>
           <article><span>추가 확인 조건</span><strong>{cautionReasons.length}개</strong><p>엇갈리거나 약화될 수 있는 조건입니다. 숫자가 적어도 방향을 단정하지 않고 함께 살펴봐야 합니다.</p></article>
         </div>
-        <p className="public-analysis-note">실제 차트 입력값을 바탕으로 만든 결과입니다. 가격·캔들·가상 차트·원시 지표 수치는 공개하지 않고, 분석에 사용된 조건과 해석만 제공합니다.</p>
+        <p className="public-analysis-note">최근 거래일의 확정 일봉을 분석한 결과입니다. 가격·차트·지표 원수치는 공개하지 않고, 분석에 반영된 조건과 해설만 보여드립니다.</p>
       </section>
-
-      <section id={sectionId('scores')} className="public-analysis-section">
-        <div className="public-section-heading"><span>02 · 점수 구성</span><h4>어떤 지표가 이번 해석에 반영됐나요?</h4><p>점수가 높을수록 해당 기술 조건이 현재 상태를 더 뒷받침한다는 뜻이며, 매수·매도 지시가 아닙니다.</p></div>
-        <div className="public-component-grid">{components.map((component) => <article key={component.key} className="public-component-card" style={{ '--component-color': component.color }}><span>{component.label}</span><strong>{formatNumber(component.score, 1)}점</strong><small>{publicIndicatorGuides[component.key]?.focus || '조건 일치 정도를 교육용 점수로 정리했습니다.'}</small><meter min="0" max={component.max || 100} value={Math.max(0, component.score || 0)} /></article>)}</div>
-      </section>
-
-      {adsensePlacementApproved && <div style={{ margin: '24px 0' }}><AdSenseSlot title="분석 패널 중간 광고" /></div>}
 
       <section id={sectionId('evidence')} className="public-analysis-section public-evidence-section">
-        <div className="public-section-heading"><span>03 · 반영한 조건</span><h4>긍정 조건과 주의 조건을 나눠 확인하세요</h4><p>같은 종목 안에서도 상승 쪽 근거와 주의할 근거가 함께 존재할 수 있습니다.</p></div>
+        <div className="public-section-heading"><span>02 · 반영한 조건</span><h4>뒷받침 조건과 주의 조건을 나눠 확인하세요</h4><p>같은 종목 안에서도 서로 다른 방향의 근거가 함께 존재할 수 있습니다.</p></div>
         <div className="public-evidence-columns">
           <article className="public-evidence-card supportive"><header><strong>해석을 뒷받침한 조건</strong><span>{supportingReasons.length}개</span></header><div>{supportingReasons.length ? supportingReasons.map((reason) => <span key={reason} onClick={() => setReasonKey(reason)} style={{cursor: 'pointer'}} title="클릭하여 설명 보기" className="clickable-reason">{publicReasonLabel(reason)} <HelpCircle size={11} style={{display:'inline', marginLeft:'2px', opacity:0.6}}/></span>) : <small>현재 공개된 뒷받침 조건이 없습니다.</small>}</div></article>
           <article className="public-evidence-card caution"><header><strong>함께 확인할 조건</strong><span>{cautionReasons.length}개</span></header><div>{cautionReasons.length ? cautionReasons.map((reason) => <span key={reason} onClick={() => setReasonKey(reason)} style={{cursor: 'pointer'}} title="클릭하여 설명 보기" className="clickable-reason">{publicReasonLabel(reason)} <HelpCircle size={11} style={{display:'inline', marginLeft:'2px', opacity:0.6}}/></span>) : <small>현재 뚜렷한 경고 조건이 없습니다.</small>}</div></article>
@@ -1316,45 +983,47 @@ function PublicAnalysisPanel({ stock }) {
       </section>
 
       <section id={sectionId('indicators')} className="public-analysis-section public-state-detail">
-        <div className="public-section-heading"><span>04 · 지표별 해설 (교육용 수치)</span><h4>각 지표가 말하는 현재 상태</h4><p>각 항목의 수치는 학습용으로 제공되며, 가격 차트 없이 기술적 지표의 상태만을 나타냅니다.</p></div>
+        <div className="public-section-heading"><span>03 · 지표별 상태 해설</span><h4>각 지표를 어떤 조건으로 분류했나요?</h4><p>실제 입력값은 공개하지 않고, 분석 코드가 판정한 상태와 조건 설명만 제공합니다.</p></div>
         {states.length ? states.map(([key, state]) => {
-          const component = componentByKey[key];
           const stateReasons = (state.reasons || []).slice(0, 6);
-          const metrics = stock.sortMetrics?.[key];
           return (
-            <article key={key} className="public-indicator-explainer">
-              <header>
+            <details
+              key={key}
+              className="public-indicator-explainer"
+              open={!compact || expandedIndicators.has(key)}
+              onToggle={(event) => {
+                if (!compact) return;
+                const isOpen = event.currentTarget.open;
+                setExpandedIndicators((current) => {
+                  const next = new Set(current);
+                  if (isOpen) next.add(key);
+                  else next.delete(key);
+                  return next;
+                });
+              }}
+            >
+              <summary>
                 <div style={{display: 'flex', flexDirection: 'column'}}>
                   <div style={{display: 'flex', alignItems: 'center', gap: '6px'}}>
                     <span>{publicIndicatorGuides[key]?.label || componentMeta[key]?.label || key}</span>
-                    {educationalGuides[key] && (
-                      <button type="button" onClick={(e) => { e.stopPropagation(); setHelpKey(key); }} style={{background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text-muted)', display: 'flex', alignItems: 'center'}} title="패턴 기준 보기">
-                        <HelpCircle size={14} />
-                      </button>
-                    )}
                   </div>
                   <h5>{publicStateLabel(state.state)}</h5>
                 </div>
-                <strong>{component ? formatNumber(component.score, 1) + '점' : '상태 확인'}</strong>
-              </header>
-              <p>{publicStateExplanation(key, state.state)}</p>
-              
-              {metrics && Object.keys(metrics).length > 0 && (
-                <div className="public-metric-summary" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', margin: '12px 0', padding: '12px', background: 'var(--surface-sunken)', borderRadius: '6px' }}>
-                  {Object.entries(metrics).map(([mKey, mVal]) => mVal !== undefined && mVal !== null ? (
-                    <div key={mKey} className="metric-badge" style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{sortOptionByKey[`detail.${key}.${mKey}`]?.label || mKey}</span>
-                      <strong style={{ fontSize: '14px' }}>{typeof mVal === 'number' ? formatNumber(mVal, 4) : mVal}</strong>
-                    </div>
-                  ) : null)}
+                <strong>상태 요약</strong>
+              </summary>
+              <div className="public-indicator-body">
+                {educationalGuides[key] && (
+                  <button type="button" onClick={() => setHelpKey(key)} className="public-guide-button" title="패턴 기준 보기">
+                    <HelpCircle size={14} /> 지표 읽는 법
+                  </button>
+                )}
+                <p>{publicStateExplanation(key, state.state)}</p>
+                <div className="public-explainer-prompt">
+                  <span>이번 분석에서 확인한 이유</span>
+                  <div>{stateReasons.length ? stateReasons.map((reason) => <button type="button" key={reason} onClick={() => setReasonKey(reason)} title="클릭하여 설명 보기" className="public-reason-detail-button">{publicReasonLabel(reason)} <HelpCircle size={11} /></button>) : <small>세부 근거를 다음 분석 갱신에서 보완합니다.</small>}</div>
                 </div>
-              )}
-
-              <div className="public-explainer-prompt">
-                <span>이번 분석에서 확인한 이유</span>
-                <div>{stateReasons.length ? stateReasons.map((reason) => <span key={reason}>{publicReasonLabel(reason)}</span>) : <small>세부 근거를 다음 분석 갱신에서 보완합니다.</small>}</div>
               </div>
-            </article>
+            </details>
           );
         }) : <div className="public-empty-detail">현재 종목의 지표별 해설을 준비 중입니다.</div>}
       </section>
@@ -1372,7 +1041,7 @@ function PrivatePerformancePanel({ performance }) {
   return (
     <section className="private-performance-panel">
       <div className="orders-header">
-        <div><p>ADMIN ONLY · KIS PAPER RESEARCH</p><h3>모의투자 · 시장 기준 비교</h3></div>
+        <div><p>관리자 전용 · KIS 모의계좌</p><h3>모의투자 성과와 시장 비교</h3></div>
         <Shield size={18} />
       </div>
       {!performance ? <div className="private-performance-empty">서버가 비교 기준일을 설정한 뒤, 관리자 전용 성과 비교가 이곳에 표시됩니다.</div> : <>
@@ -1388,7 +1057,7 @@ function PrivatePerformancePanel({ performance }) {
             <small>기준일 {benchmark.baselineDate || performance.baselineDate || '-'} · 기준시각 {benchmark.asOfDate || '-'}</small>
           </article>)}
         </div>
-        <p className="private-performance-note">운영자 KIS 모의투자 실험의 사실형 비교값입니다. 실제 투자 성과·수익 보장·매매 권유가 아니며, 비교 기준과 기간은 위에 표시된 값으로 한정됩니다.</p>
+        <p className="private-performance-note">KIS 모의계좌의 조회값을 같은 기준일의 시장지수와 비교한 결과입니다. 실제 투자 성과나 수익을 보장하지 않으며, 표시된 기간 안에서만 비교해 주세요.</p>
       </>}
     </section>
   );
@@ -1414,7 +1083,7 @@ function PortfolioSnapshot({ portfolio, onRefresh, refreshBusy, refreshMessage, 
   return (
     <section className="portfolio-strip">
       <div className="orders-header">
-        <div><p>모의투자 성과 실험 · {BRAND_SHORT} · {portfolio.mode || 'paper'}</p><h3>가상 계좌 스냅샷</h3></div>
+        <div><p>관리자 전용 모의계좌 · {BRAND_SHORT}</p><h3>가상 계좌 현황</h3></div>
         <div className="portfolio-header-actions">
           <span className="portfolio-refresh-message" aria-live="polite">{refreshMessage}</span>
           <button type="button" className="paper-refresh-button" onClick={onRefresh} disabled={refreshBusy || !onRefresh}>
@@ -1425,7 +1094,7 @@ function PortfolioSnapshot({ portfolio, onRefresh, refreshBusy, refreshMessage, 
         </div>
       </div>
       <div className="portfolio-hero">
-        <div><span>{isExamplePortfolio ? '예시 포트폴리오 수익률' : '누적 계좌 수익률'}</span><strong className={isUp ? 'pnl-up' : 'pnl-down'}>{formatSigned(returnPct, 2)}%</strong><p>{isExamplePortfolio ? '공개 화면용 예시 수치입니다. 관리자 로그인 후 실제 모의투자 계좌를 확인할 수 있습니다.' : '초기 실험금 대비 현재 KIS 모의투자 계좌 전체 가치 기준입니다.'}</p></div>
+        <div><span>{isExamplePortfolio ? '예시 포트폴리오 수익률' : '누적 계좌 수익률'}</span><strong className={isUp ? 'pnl-up' : 'pnl-down'}>{formatSigned(returnPct, 2)}%</strong><p>{isExamplePortfolio ? '개발 환경에서만 사용하는 예시 수치입니다.' : 'KIS 모의계좌의 초기 잔고와 현재 평가자산을 비교한 값입니다.'}</p></div>
         <div className="equity-card"><span>총 평가 자산</span><strong>{formatNumber(totalEquity, 0)}</strong><small>업데이트 {formatDateTime(portfolio.updatedAt)}</small></div>
       </div>
       <div className="portfolio-grid">
@@ -1437,7 +1106,7 @@ function PortfolioSnapshot({ portfolio, onRefresh, refreshBusy, refreshMessage, 
         <div><span>평가손익</span><strong className={unrealizedPnl >= 0 ? 'pnl-up' : 'pnl-down'}>{formatSigned(unrealizedPnl, 0)}</strong></div>
         <div><span>보유 종목</span><strong>{formatNumber(portfolio.holdingCount ?? holdings.length, 0)}</strong></div>
       </div>
-      <p className="section-note portfolio-legal-note">이 가상 계좌는 모의투자 실험 기록입니다. 실제 계좌 수익, 세금, 수수료, 슬리피지, 거래 제한을 보장하거나 대체하지 않습니다.</p>
+      <p className="section-note portfolio-legal-note">이 화면은 모의투자 기록입니다. 실제 투자 성과를 의미하지 않으며 세금, 수수료, 체결 오차와 거래 제한을 모두 반영하지 않을 수 있습니다.</p>
       <div className="portfolio-holdings">
         {holdings.length === 0 && <div className="empty-watch">현재 가상 보유 종목이 없습니다.</div>}
         {holdings.slice(0, 6).map((holding) => (
@@ -1485,15 +1154,15 @@ function TradeLogPanel({ logs }) {
             {filteredLogs.length === 0 && <tr><td colSpan="9" className="empty-table-cell">조건에 맞는 가상 체결 기록이 없습니다.</td></tr>}
             {filteredLogs.map((log, index) => (
               <tr key={`${log.code}-${log.time}-${index}`}>
-                <td>{log.time}</td>
-                <td><span className={`side side-${String(log.action).toLowerCase()}`}>{actionLabel(log.action)}</span></td>
-                <td><span className="symbol-cell"><strong>{log.name}</strong><small>{log.code} · {log.source}</small></span></td>
-                <td>{formatNumber(log.quantity, 0)}</td>
-                <td>{formatNumber(log.price, 0)}</td>
-                <td>{formatNumber(log.amount, 0)}</td>
-                <td className={Number(log.pnl || 0) >= 0 ? 'pnl-up' : 'pnl-down'}>{log.pnl === undefined ? '-' : formatSigned(log.pnl, 0)}</td>
-                <td>{reasonLabel(log.reason)}</td>
-                <td>{log.brokerOrderNo || '-'}</td>
+                <td data-label="시간">{log.time}</td>
+                <td data-label="구분"><span className={`side side-${String(log.action).toLowerCase()}`}>{actionLabel(log.action)}</span></td>
+                <td data-label="종목"><span className="symbol-cell"><strong>{log.name}</strong><small>{log.code} · {log.source}</small></span></td>
+                <td data-label="수량">{formatNumber(log.quantity, 0)}</td>
+                <td data-label="가격">{formatNumber(log.price, 0)}</td>
+                <td data-label="금액">{formatNumber(log.amount, 0)}</td>
+                <td data-label="손익" className={Number(log.pnl || 0) >= 0 ? 'pnl-up' : 'pnl-down'}>{log.pnl === undefined ? '-' : formatSigned(log.pnl, 0)}</td>
+                <td data-label="사유">{reasonLabel(log.reason)}</td>
+                <td data-label="브로커 주문">{log.brokerOrderNo || '-'}</td>
               </tr>
             ))}
           </tbody>
@@ -1507,13 +1176,13 @@ function OrdersPanel({ orders }) {
   return (
     <section className="orders-strip">
       <div className="orders-header"><div><p>리밸런싱 실험 후보</p><h3>다음 가상 주문 큐</h3></div><AlertTriangle size={18} /></div>
-      <p className="section-note">아래 항목은 전략 엔진이 만든 실험 후보입니다. 실제 매매 권유가 아니라, 모의투자·백테스트 검증을 위한 기록입니다.</p>
+      <p className="section-note">아래 항목은 모의투자와 백테스트를 확인하기 위해 전략 엔진이 만든 가상 주문 후보입니다. 실제 매매 권유가 아닙니다.</p>
       <div className="order-table">
         <table>
           <thead><tr><th>시간</th><th>코드</th><th>구분</th><th>금액</th><th>사유</th></tr></thead>
           <tbody>
             {orders.length === 0 && <tr><td colSpan="5" className="empty-table-cell">현재 가상 주문 후보가 없습니다.</td></tr>}
-            {orders.map((order, index) => <tr key={`${order.code}-${order.action}-${order.amount}-${index}`}><td>{order.time}</td><td>{order.code}</td><td><span className={`side side-${String(order.action).toLowerCase()}`}>{actionLabel(order.action)}</span></td><td>{formatNumber(order.amount, 0)}</td><td>{reasonLabel(order.reason)}</td></tr>)}
+            {orders.map((order, index) => <tr key={`${order.code}-${order.action}-${order.amount}-${index}`}><td data-label="시간">{order.time}</td><td data-label="코드">{order.code}</td><td data-label="구분"><span className={`side side-${String(order.action).toLowerCase()}`}>{actionLabel(order.action)}</span></td><td data-label="금액">{formatNumber(order.amount, 0)}</td><td data-label="사유">{reasonLabel(order.reason)}</td></tr>)}
           </tbody>
         </table>
       </div>
@@ -1522,7 +1191,7 @@ function OrdersPanel({ orders }) {
 }
 
 export default function ResearchApp() {
-  const [signals, setSignals] = useState(() => mockSignals.map(mapStockPayload));
+  const [signals, setSignals] = useState([]);
   const [orders, setOrders] = useState(fallbackOrders);
   const [portfolio, setPortfolio] = useState(fallbackPortfolio);
   const [tradeLogs, setTradeLogs] = useState(fallbackTradeLogs);
@@ -1533,16 +1202,28 @@ export default function ResearchApp() {
   const [hasLoaded, setHasLoaded] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [searchText, setSearchText] = useState('');
+  const [publicManifests, setPublicManifests] = useState({});
+  const [publicLoadedPages, setPublicLoadedPages] = useState([]);
+  const [visibleCount, setVisibleCount] = useState(30);
   const [marketFilter, setMarketFilter] = useState('ALL');
   const [labelFilter, setLabelFilter] = useState('ALL');
   const [sortMode, setSortMode] = useState('confidence');
   const [sortDirection, setSortDirection] = useState('desc');
   const [workspaceView, setWorkspaceView] = useState('console');
+  const [mobilePane, setMobilePane] = useState('list');
+  const [isCompactLayout, setIsCompactLayout] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 920px)').matches);
   const [theme, setTheme] = useState(() => localStorage.getItem('mesugak_theme') || 'beigeOwl');
 
   useEffect(() => {
     localStorage.setItem('mesugak_theme', theme);
   }, [theme]);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 920px)');
+    const updateLayout = () => setIsCompactLayout(media.matches);
+    updateLayout();
+    media.addEventListener?.('change', updateLayout);
+    return () => media.removeEventListener?.('change', updateLayout);
+  }, []);
   const [showDisclaimerModal, setShowDisclaimerModal] = useState(false);
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -1551,6 +1232,8 @@ export default function ResearchApp() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [settingsStatus, setSettingsStatus] = useState('');
   const [paperRefreshBusy, setPaperRefreshBusy] = useState(false);
+  const publicRefreshInFlightRef = useRef(false);
+  const lastPublicRefreshAtRef = useRef(0);
   const [paperAccountMessage, setPaperAccountMessage] = useState('개인 모의투자 계좌는 관리자 로그인 후 확인할 수 있습니다.');
   const paperRefreshSubscriptionRef = useRef(null);
   const liveDataAccessEnabled = isAdmin && adminViewActive;
@@ -1585,11 +1268,88 @@ export default function ResearchApp() {
     });
   }, [signals, searchText, marketFilter, labelFilter, sortMode, sortDirection]);
 
+  const displayedSignals = adminViewActive ? filteredSignals : filteredSignals.slice(0, visibleCount);
+  const publicTotalCount = Object.values(publicManifests).reduce((total, manifest) => total + Number(manifest.totalCount || 0), 0);
+  const publicChunkCount = Object.entries(publicManifests).reduce((total, [, manifest]) => total + Number(manifest.chunkCount || 0), 0);
+  const hasMorePublic = !adminViewActive && (
+    visibleCount < filteredSignals.length || publicLoadedPages.length < publicChunkCount
+  );
+
   // With no manual selection, the report always starts from the first visible row
   // after the current search, filters, and sort order are applied.
   const selected = useMemo(() => (
-    filteredSignals.find((signal) => signal.id === selectedId) ?? filteredSignals[0] ?? signals[0]
-  ), [filteredSignals, selectedId, signals]);
+    displayedSignals.find((signal) => signal.id === selectedId) ?? displayedSignals[0] ?? signals[0]
+  ), [displayedSignals, selectedId, signals]);
+
+  // The analysis placement is intentionally narrow: it never appears on
+  // loading, error, empty, administrator, or low-information reports.
+  const publicAnalysisAdReady = analysisAdsRequested
+    && publicLiveDataApproved
+    && hasLoaded
+    && !loading
+    && !adminViewActive
+    && !loadError
+    && hasSubstantialAnalysisContent(selected);
+
+  useEffect(() => {
+    if (adminViewActive || searchText.trim().length < 2 || Object.keys(publicManifests).length === 0) return undefined;
+    const timer = window.setTimeout(() => {
+      const queryText = searchText.trim().toLowerCase();
+      const loaded = new Set(publicLoadedPages);
+      const missingPages = [];
+      Object.entries(publicManifests).forEach(([market, manifest]) => {
+        if (marketFilter !== 'ALL' && marketFilter !== market) return;
+        (manifest.searchIndex || []).forEach((entry) => {
+          const code = Array.isArray(entry) ? entry[1] : entry?.code;
+          const name = Array.isArray(entry) ? entry[2] : entry?.name;
+          const page = Array.isArray(entry) ? entry[3] : entry?.page;
+          if ([code, name].join(' ').toLowerCase().includes(queryText)) {
+            const key = `${market}:${page}`;
+            if (!loaded.has(key) && !missingPages.includes(key) && missingPages.length < 8) missingPages.push(key);
+          }
+        });
+      });
+      if (missingPages.length === 0) return;
+      void loadPublicPageKeys(missingPages).then((incoming) => {
+        setSignals((current) => mergeSignals(current, incoming));
+        setPublicLoadedPages((current) => [...new Set([...current, ...missingPages])]);
+        setVisibleCount(30);
+      }).catch(() => setLoadError('검색 결과 일부를 불러오지 못했습니다. 잠시 뒤 다시 시도해 주세요.'));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [adminViewActive, searchText, marketFilter, publicManifests, publicLoadedPages]);
+
+  const loadMorePublic = async () => {
+    if (visibleCount < filteredSignals.length) {
+      setVisibleCount((count) => count + 30);
+      return;
+    }
+    const loaded = new Set(publicLoadedPages);
+    let nextKey = '';
+    for (const [market, manifest] of Object.entries(publicManifests)) {
+      if (marketFilter !== 'ALL' && marketFilter !== market) continue;
+      for (let page = 0; page < Number(manifest.chunkCount || 0); page += 1) {
+        const key = `${market}:${page}`;
+        if (!loaded.has(key)) {
+          nextKey = key;
+          break;
+        }
+      }
+      if (nextKey) break;
+    }
+    if (!nextKey) return;
+    setLoading(true);
+    try {
+      const incoming = await loadPublicPageKeys([nextKey]);
+      setSignals((current) => mergeSignals(current, incoming));
+      setPublicLoadedPages((current) => [...new Set([...current, nextKey])]);
+      setVisibleCount((count) => count + 30);
+    } catch {
+      setLoadError('다음 30개 종목을 불러오지 못했습니다. 잠시 뒤 다시 시도해 주세요.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const refreshPrivatePaperAccount = async (activeUser = user) => {
     if (!activeUser || !firebaseReady || !db) {
@@ -1692,25 +1452,43 @@ export default function ResearchApp() {
     }
   };
   const refreshSignals = async (adminAccess = adminViewActive) => {
+    if (!adminAccess) {
+      const recentlyLoaded = Date.now() - lastPublicRefreshAtRef.current < 5_000;
+      if (publicRefreshInFlightRef.current || recentlyLoaded) return;
+      publicRefreshInFlightRef.current = true;
+    }
     setLoading(true); setLoadError('');
     try {
-      const loaded = await loadSignalsFromFirestore({ admin: adminAccess });
+      const result = await loadSignalsFromFirestore({ admin: adminAccess });
+      const loaded = result.signals;
+      setPublicManifests(result.manifests);
+      setPublicLoadedPages(result.loadedPages);
+      setVisibleCount(30);
       if (loaded.length > 0) {
         const nextSelectedId = adminAccess && loaded.some((signal) => signal.id === selectedId) ? selectedId : '';
         const selectedIndex = Math.max(0, loaded.findIndex((signal) => signal.id === nextSelectedId));
         const selectedSignal = loaded[selectedIndex];
         if (adminAccess && firebaseReady && db && !selectedSignal.raw?.hasFullHistory) { const snap = await getDoc(doc(db, 'stock_analysis', selectedSignal.id)); if (snap.exists()) loaded[selectedIndex] = mapStockPayload({ ...selectedSignal.raw, ...snap.data(), id: selectedSignal.id }); }
         setSignals(loaded); setSelectedId(nextSelectedId);
-      } else { const mock = mockSignals.map(mapStockPayload); setSignals(mock); setSelectedId(mock[0]?.id || ''); setLoadError(adminAccess ? 'Firestore에 V2 분석 목록이 아직 없습니다. 예시 데이터로 표시 중입니다.' : '공개 분석 결과가 없어 로컬 테스트용 예시 데이터를 표시합니다.'); }
+      } else if (adminAccess && developmentSignals.length > 0) { setSignals(developmentSignals); setSelectedId(developmentSignals[0]?.id || ''); setLoadError('개발 환경 예시 데이터입니다. Firestore V2 분석 목록은 아직 없습니다.'); }
+      else { setSignals([]); setSelectedId(''); setLoadError(adminAccess ? 'Firestore에 V2 분석 목록이 아직 없습니다.' : '공개 분석 결과가 아직 발행되지 않았습니다.'); }
       if (adminAccess) { const loadedOrders = await loadOrdersFromFirestore(true).catch(() => []); setOrders(loadedOrders.length > 0 ? loadedOrders : fallbackOrders); } else { setOrders([]); }
-    } catch (error) { const mock = mockSignals.map(mapStockPayload); setSignals(mock); setSelectedId(mock[0]?.id || ''); setOrders([]); setLoadError(adminAccess ? `Firestore 조회에 실패해 예시 데이터로 전환했습니다: ${error?.message || '알 수 없는 오류'}` : '공개 분석 결과가 없어 로컬 테스트용 예시 데이터를 표시합니다.'); }
-    finally { setLoading(false); setHasLoaded(true); }
+    } catch (error) { setSignals([]); setSelectedId(''); setOrders([]); setLoadError(adminAccess ? `Firestore 조회에 실패했습니다: ${error?.message || '알 수 없는 오류'}` : `공개 분석 결과를 불러오지 못했습니다: ${error?.message || '알 수 없는 오류'}`); }
+    finally {
+      if (!adminAccess) {
+        publicRefreshInFlightRef.current = false;
+        lastPublicRefreshAtRef.current = Date.now();
+      }
+      setLoading(false);
+      setHasLoaded(true);
+    }
   };
 
   const enterAdminAnalysis = () => {
     if (!isAdmin) return;
     setAdminViewActive(true);
     setWorkspaceView('console');
+    setMobilePane('list');
     setSettingsStatus('관리자 분석 화면을 불러오는 중입니다.');
     void refreshSignals(true);
     void refreshPrivatePaperAccount(user);
@@ -1719,6 +1497,7 @@ export default function ResearchApp() {
   const exitAdminAnalysis = () => {
     setAdminViewActive(false);
     setWorkspaceView('console');
+    setMobilePane('list');
     setSettingsStatus('공개 분석 화면으로 전환했습니다.');
     stopPaperRefreshListener();
     setPaperRefreshBusy(false);
@@ -1746,6 +1525,8 @@ export default function ResearchApp() {
 
   const selectSignal = async (signal) => {
     setSelectedId(signal.id);
+    setFiltersOpen(false);
+    setMobilePane('detail');
     await loadSignalDetail(signal);
   };
 
@@ -1759,19 +1540,6 @@ export default function ResearchApp() {
       await signInWithPopup(auth, googleProvider);
     } catch (error) {
       setSettingsStatus(`${error?.code || 'auth/error'}: ${error?.message || '로그인 실패'}`);
-    }
-  };
-
-  const loginWithRedirect = async () => {
-    if (!auth || !googleProvider) {
-      setSettingsStatus('Firebase 로그인 환경이 설정되지 않았습니다.');
-      return;
-    }
-    setSettingsStatus('Google 로그인으로 이동합니다.');
-    try {
-      await signInWithRedirect(auth, googleProvider);
-    } catch (error) {
-      setSettingsStatus(`${error?.code || 'auth/error'}: ${error?.message || '이동 로그인 실패'}`);
     }
   };
 
@@ -1824,7 +1592,7 @@ export default function ResearchApp() {
           setSettingsStatus('관리자 권한 확인됨 · 기본 공개 분석 화면을 표시합니다.');
           void refreshSignals(false);
         } else {
-          setSettingsStatus('관리자 권한이 없어 가격 없는 공개 분석 결과만 표시합니다.');
+          setSettingsStatus('관리자 권한이 없어 공개 분석 결과만 표시합니다.');
           setWorkspaceView('console');
           setSortMode('confidence');
           setPortfolio(fallbackPortfolio);
@@ -1850,10 +1618,10 @@ export default function ResearchApp() {
   }
 
   return (
-    <main className={`terminal-shell ${themeClassMap[theme] || themeClassMap.light}`}>
-      <aside className="watchlist">
-        <div className="brand-block"><span>{BRAND_FULL}</span><h1>{BRAND_SHORT}</h1><p>기술지표를 읽고, 모의투자 실험으로 전략 아이디어를 검토합니다.</p></div>
-        <div className="watchlist-meta"><span>{filteredSignals.length} / {summary.observed} 종목</span><button type="button" className="icon-button" onClick={() => refreshSignals(adminViewActive)} aria-label="데이터 새로고침"><RefreshCw size={16} className={loading ? 'spin' : ''} /></button></div>
+    <main className={`terminal-shell ${themeClassMap[theme] || themeClassMap.light} mobile-pane-${mobilePane}`}>
+      <aside className={`watchlist ${mobilePane === 'detail' ? 'mobile-pane-hidden' : ''}`}>
+        <div className="brand-block"><span>{BRAND_FULL}</span><h1>{BRAND_SHORT}</h1><p>종목별 기술지표가 무엇을 보여주는지 쉽게 살펴보세요.</p></div>
+        <div className="watchlist-meta"><span>{displayedSignals.length} / {adminViewActive ? summary.observed : publicTotalCount || summary.observed} 종목</span><button type="button" className="icon-button" onClick={() => refreshSignals(adminViewActive)} aria-label="데이터 새로고침"><RefreshCw size={16} className={loading ? 'spin' : ''} /></button></div>
         <div className="watch-filters" aria-label="종목 필터">
 
           <button type="button" className="filter-toggle" onClick={() => setFiltersOpen((open) => !open)} aria-expanded={filtersOpen} aria-controls="watch-filter-controls">
@@ -1862,8 +1630,15 @@ export default function ResearchApp() {
           {filtersOpen && <div id="watch-filter-controls" className="filter-controls">
           <input type="search" value={searchText} onChange={(event) => { setSearchText(event.target.value); setSelectedId(''); }} placeholder="종목명 또는 코드 검색" />
             <div className="filter-grid">
-              <select value={marketFilter} onChange={(event) => { setMarketFilter(event.target.value); setSelectedId(''); }} aria-label="시장 필터"><option value="ALL">전체 시장</option><option value="KR">KR</option><option value="US">US</option></select>
-              <select value={labelFilter} onChange={(event) => { setLabelFilter(event.target.value); setSelectedId(''); }} aria-label="조건 필터"><option value="ALL">전체 조건</option><option value="STRONG_BUY">강한 기술 조건</option><option value="BUY_CANDIDATE">관심 조건 충족</option><option value="WATCH">관찰</option><option value="HOLD">중립</option><option value="DEFENSIVE">방어 신호</option><option value="AVOID">리스크 신호</option></select>
+              <select value={marketFilter} onChange={(event) => { setMarketFilter(event.target.value); setSelectedId(''); }} aria-label="시장 필터"><option value="ALL">전체 시장</option><option value="KR">KR</option></select>
+              <select value={labelFilter} onChange={(event) => { setLabelFilter(event.target.value); setSelectedId(''); }} aria-label="조건 필터">
+                <option value="ALL">전체 조건</option>
+                {adminViewActive ? <>
+                  <option value="STRONG_BUY">강한 기술 조건</option><option value="BUY_CANDIDATE">관심 조건 충족</option><option value="WATCH">관찰</option><option value="HOLD">중립</option><option value="DEFENSIVE">방어 신호</option><option value="AVOID">리스크 신호</option>
+                </> : <>
+                  <option value="HIGH_ALIGNMENT">조건 일치 높음</option><option value="MODERATE_ALIGNMENT">조건 일치 보통</option><option value="LIMITED_ALIGNMENT">조건 일치 제한적</option><option value="CAUTION">주의 조건 우세</option>
+                </>}
+              </select>
             </div>
             <div className="sort-heading"><span>정렬 기준</span><strong style={{ color: activeSort.color }}>{activeSort.category}</strong></div>
             <div className="sort-direction" aria-label="정렬 방향"><button type="button" className={sortDirection === 'desc' ? 'active' : ''} onClick={() => { setSortDirection('desc'); setSelectedId(''); }}>높은 순</button><button type="button" className={sortDirection === 'asc' ? 'active' : ''} onClick={() => { setSortDirection('asc'); setSelectedId(''); }}>낮은 순</button></div>
@@ -1871,26 +1646,32 @@ export default function ResearchApp() {
             <select value={theme} onChange={(event) => setTheme(event.target.value)} aria-label="테마">{themeOptions.map((option) => <option key={option.key} value={option.key}>{option.label} 테마</option>)}</select>
           </div>}
         </div>
-        <div className="market-summary"><div><span>조건 강함</span><strong>{summary.strong}</strong></div><div><span>방어 신호</span><strong>{summary.defensive}</strong></div><div><span>실험 큐</span><strong>{summary.staged}</strong></div></div>
+        <div className="market-summary"><div><span>조건 강함</span><strong>{summary.strong}</strong></div><div><span>주의 신호</span><strong>{summary.defensive}</strong></div><div><span>{adminViewActive ? '실험 큐' : '표시 종목'}</span><strong>{adminViewActive ? summary.staged : displayedSignals.length}</strong></div></div>
         <div className="signal-stack">
           {filteredSignals.length === 0 && <div className="empty-watch">조건에 맞는 종목이 없습니다.</div>}
-          {filteredSignals.map((signal, index) => <Fragment key={signal.id}><button type="button" className={`watch-row ${selected.id === signal.id ? 'selected' : ''}`} onClick={() => selectSignal(signal)}><span className="watch-main"><strong>{signal.name}</strong><span>{signal.market}:{signal.code} · {signal.label}</span></span><span className={`watch-score score-${signal.riskState}`}>{formatNumber(signal.confidence, 1)}</span></button>{adsensePlacementApproved && (index + 1) % 5 === 0 && <WatchlistAd />}</Fragment>)}
+          {displayedSignals.map((signal) => <button key={signal.id} type="button" className={`watch-row ${selected?.id === signal.id ? 'selected' : ''}`} aria-current={selected?.id === signal.id ? 'true' : undefined} onClick={() => selectSignal(signal)}><span className="watch-main"><strong>{signal.name}</strong><span>{signal.market}:{signal.code} · {signal.label}</span></span><span className={`watch-score score-${signal.riskState}`}>{formatNumber(signal.confidence, 1)}</span></button>)}
+          {hasMorePublic && <button type="button" className="auth-button ghost" onClick={loadMorePublic} disabled={loading} style={{ margin: '12px', justifyContent: 'center' }}>{loading ? '불러오는 중...' : '다음 30개 불러오기'}</button>}
         </div>
       </aside>
 
-      <section className="chart-column">
+      <section className={`chart-column ${mobilePane === 'list' ? 'mobile-pane-hidden' : ''}`}>
+        <div className="mobile-detail-bar">
+          <button type="button" onClick={() => setMobilePane('list')} aria-label="종목 목록으로 돌아가기">← 목록</button>
+          {selected && <span><strong>{selected.name}</strong><small>{selected.market}:{selected.code}</small></span>}
+        </div>
         <header className="desk-topbar">
-          <div><p>{loadError || (adminViewActive ? '관리자 Firestore 분석 데이터 · 교육/연구용 표시' : publicLiveDataApproved ? '권리 확인된 가격 없는 공개 분석 결과 · 교육/연구용 표시' : '공개 데이터 이용권 검토 중 · 교육/연구용 표시')}</p><h2>{BRAND_SHORT}</h2>{!user && <span className="topbar-disclaimer" onClick={() => setShowDisclaimerModal(true)} style={{cursor: 'pointer', textDecoration: 'underline'}}>특정 종목의 매수·매도·보유를 권유하지 않습니다. (상세보기)</span>}</div>
+          <div><p>{loadError || (adminViewActive ? '관리자 분석 화면 · 상세 지표 확인' : publicLiveDataApproved ? '금융위원회 공공데이터 기반 · 최근 거래일 분석' : '공개 분석을 준비 중입니다')}</p><h2>{BRAND_SHORT}</h2>{!user && <span className="topbar-disclaimer" onClick={() => setShowDisclaimerModal(true)} style={{cursor: 'pointer', textDecoration: 'underline'}}>기술지표 학습 정보이며 투자 권유가 아닙니다. (자세히)</span>}</div>
           <div className="topbar-actions">
-            <div className="workspace-tabs" aria-label="작업 화면"><button type="button" className={workspaceView === 'console' ? 'active' : ''} onClick={() => setWorkspaceView('console')}>연구 콘솔</button>{adminViewActive && <button type="button" className={workspaceView === 'executions' ? 'active' : ''} onClick={() => setWorkspaceView('executions')}>모의투자 성과</button>}</div>
-            {adminViewActive ? <div className="topbar-pills"><span><CandlestickChart size={14} /> 캔들</span><span><Cloud size={14} /> 이평·구름</span><span><Gauge size={14} /> RSI</span></div> : <div className="topbar-pills"><span><Shield size={14} /> 가격 없는 분석 근거</span></div>}
-            <div className="auth-block"><span>{user ? (settingsStatus || (adminChecking ? '관리자 권한 확인 중...' : adminViewActive ? '관리자 분석 화면 · 실시간 분석 데이터 사용 중' : isAdmin ? '관리자 권한 확인됨 · 공개 분석 화면 사용 중' : '로그인됨 · 가격 없는 공개 분석 결과 사용 중')) : '로그인하지 않아도 가격 없는 분석 결과를 볼 수 있습니다.'}</span><div className="auth-buttons">{isAdmin && <button type="button" className="auth-button ghost" onClick={adminViewActive ? exitAdminAnalysis : enterAdminAnalysis}><span>{adminViewActive ? '공개 분석 보기' : '관리자 분석 보기'}</span></button>}<button type="button" className="auth-button" onClick={user ? () => signOut(auth) : loginWithGoogle}>{user ? <LogOut size={14} /> : <LogIn size={14} />}<span>{user ? '로그아웃' : '구글 로그인'}</span></button></div></div>
+            <a className="auth-button ghost research-learning-link" href="/">지표 학습</a>
+            <div className="workspace-tabs" aria-label="작업 화면"><button type="button" className={workspaceView === 'console' ? 'active' : ''} onClick={() => setWorkspaceView('console')}>종목 분석</button>{adminViewActive && <button type="button" className={workspaceView === 'executions' ? 'active' : ''} onClick={() => setWorkspaceView('executions')}>모의투자 성과</button>}</div>
+            {adminViewActive ? <div className="topbar-pills"><span><CandlestickChart size={14} /> 캔들</span><span><Cloud size={14} /> 이평·구름</span><span><Gauge size={14} /> RSI</span></div> : <div className="topbar-pills"><span><Shield size={14} /> 분석 근거와 해설</span></div>}
+            <div className="auth-block"><span>{user ? (settingsStatus || (adminChecking ? '관리자 권한 확인 중...' : adminViewActive ? '관리자 분석 화면 · 상세 지표 확인 중' : isAdmin ? '관리자 권한 확인됨 · 공개 분석 화면 사용 중' : '로그인됨 · 공개 분석 화면 사용 중')) : '로그인 없이 공개 분석을 볼 수 있습니다.'}</span><div className="auth-buttons">{isAdmin && <button type="button" className="auth-button ghost" onClick={adminViewActive ? exitAdminAnalysis : enterAdminAnalysis}><span>{adminViewActive ? '공개 분석 보기' : '관리자 분석 보기'}</span></button>}<button type="button" className="auth-button" onClick={user ? () => signOut(auth) : loginWithGoogle}>{user ? <LogOut size={14} /> : <LogIn size={14} />}<span>{user ? '로그아웃' : '구글 로그인'}</span></button></div></div>
           </div>
         </header>
-        <section className="notice-panel"><Shield size={18} /><p>이 서비스는 기술지표 학습 및 차트 분석 보조 도구입니다. 점수와 모의투자 결과는 연구용 참고값이며, 실제 수익을 보장하지 않습니다.</p></section>
-        <section className="notice-panel data-rights-panel"><AlertTriangle size={18} /><p>{adminViewActive ? '관리자 분석 화면입니다. 원시 시세와 기술 차트를 포함한 최신 분석 데이터를 연구·운영 목적으로 표시합니다.' : publicLiveDataApproved ? '시장 데이터는 출처별 이용 조건이 다릅니다. 공개 화면은 확인된 범위에서만 가격·차트·세부 수치 없이 분석 결과와 해석 근거를 표시합니다.' : '공개 실데이터는 이용권과 공개 범위가 서면으로 확인될 때까지 비활성화합니다. 로그인한 관리자만 연구용 원시 분석과 모의투자 비교를 확인할 수 있습니다.'}</p></section>
-        {workspaceView === 'console' && <>{adminViewActive ? selected ? <><div className="analysis-layout"><TechnicalChart stock={selected} loading={detailLoadingId === selected?.id} /><ScoreDock stock={selected} /></div><PublicAnalysisPanel stock={selected} /></> : <PublicAnalysisUnavailable message="관리자 분석 목록을 아직 불러오지 못했습니다. 잠시 후 새로고침해 주세요." /> : selected ? <PublicAnalysisPanel stock={selected} /> : <PublicAnalysisUnavailable message={publicLiveDataApproved ? loadError : '실제 종목 분석 데이터는 데이터 이용권과 공개 범위를 서면으로 확인한 뒤에만 공개합니다. 현재는 기술지표 교육·연구 안내만 제공합니다.'} />}{adsensePlacementApproved && <AdSenseSlot title="본문 광고" />}</>}
-        {workspaceView === 'executions' && adminViewActive && <div className="execution-page"><PortfolioSnapshot portfolio={portfolio} onRefresh={requestPaperAccountRefresh} refreshBusy={paperRefreshBusy} refreshMessage={paperAccountMessage} canRefresh={Boolean(adminViewActive && firebaseReady && db)} /><PrivatePerformancePanel performance={privatePerformance} /><TradeLogPanel logs={tradeLogs} /><OrdersPanel orders={orders} />{adsensePlacementApproved && <AdSenseSlot title="성과 화면 광고" />}</div>}
+        <section className="notice-panel"><Shield size={18} /><p>최근 거래일의 확정 일봉을 바탕으로 기술지표가 어떤 상태인지 설명하는 학습 서비스입니다. 화면의 점수와 해설은 기술지표를 공부하기 위한 참고자료이며, 특정 종목의 거래나 수익을 보장하지 않습니다.</p></section>
+        <section className="notice-panel data-rights-panel"><AlertTriangle size={18} /><p>{adminViewActive ? '관리자 화면에서는 금융위원회 공공데이터로 계산한 차트와 상세 지표를 확인할 수 있습니다.' : publicLiveDataApproved ? '금융위원회 공공데이터에서 제공하는 최근 거래일의 확정 일봉을 분석해 종목별 종합점수와 지표 해설을 보여드립니다. 현재가, 가격 차트와 지표 원수치는 공개하지 않습니다.' : '공개 분석을 준비하고 있습니다. 데이터 확인이 끝나면 종목별 점수와 지표 해설을 보여드립니다.'}</p></section>
+        {workspaceView === 'console' && <>{adminViewActive ? selected ? <><div className="analysis-layout"><TechnicalChart stock={selected} loading={detailLoadingId === selected?.id} /><ScoreDock stock={selected} /></div><PublicAnalysisPanel stock={selected} compact={isCompactLayout} /></> : <PublicAnalysisUnavailable message="관리자 분석 목록을 아직 불러오지 못했습니다. 잠시 후 새로고침해 주세요." /> : selected ? <PublicAnalysisPanel stock={selected} compact={isCompactLayout} /> : <PublicAnalysisUnavailable message={publicLiveDataApproved ? loadError : '공개 분석 데이터를 준비하고 있습니다. 잠시 후 다시 확인해 주세요.'} />}{publicAnalysisAdReady && <AdSenseSlot title="분석 본문 광고" placement="analysis" />}</>}
+        {workspaceView === 'executions' && adminViewActive && <div className="execution-page"><PortfolioSnapshot portfolio={portfolio} onRefresh={requestPaperAccountRefresh} refreshBusy={paperRefreshBusy} refreshMessage={paperAccountMessage} canRefresh={Boolean(adminViewActive && firebaseReady && db)} /><PrivatePerformancePanel performance={privatePerformance} /><TradeLogPanel logs={tradeLogs} /><OrdersPanel orders={orders} /></div>}
 
       </section>
       {showDisclaimerModal && <DisclaimerModal onClose={() => setShowDisclaimerModal(false)} />}

@@ -53,7 +53,9 @@ Each list item should include fields needed for sorting and filtering:
 ## New Strategy Collections
 
 - `strategy_runs/{runId}`: run metadata and parameters.
-- `strategy_candidates/{runId}_{MARKET}_{CODE}`: detailed score reasons.
+- `strategy_candidates/{runId}_{MARKET}_{CODE}`: legacy run snapshots. The
+  active daily analysis does not write these because `stock_analysis` already
+  stores the detailed score reasons and history.
 - `target_allocations/{MARKET}_{DATE}`: cash target and per-stock target weights.
 - `rebalance_orders/{MARKET}_{DATE}_{CODE}`: staged buy/sell/hold decisions.
 - `risk_state/{MARKET}`: current defensive mode and cash ratio.
@@ -163,11 +165,18 @@ The fresh account state remains in `bot_account_snapshot/latest` and
 `bot_portfolio/{CODE}`. Both are admin-only reads.
 ## `public_analysis_meta/public_meta_v2_{MARKET}_{N}`
 
-Sanitized price-free analysis feed. It is currently administrator-only while data-display rights are reviewed; a future public release requires a deliberate Firestore-rules deployment after written approval.
+Sanitized aggregate-only analysis feed. Anonymous direct reads are allowed only
+for the explicitly named `public_meta_v2_KR_{manifest|number}` documents;
+all other analysis collections and document IDs remain administrator-only.
 
-- `market`, `strategyVersion`, `updatedAt`, `list[]`
-- Each item includes identity, analysis date, qualitative status, aggregate/component scores, interpretation reasons, indicator state names, and risk flags.
+- `market`, `strategyVersion`, `pageIndex`, `pageSize`, `updatedAt`, `list[]`
+- Each item includes identity, analysis date, one proprietary aggregate score/band, interpretation reasons, indicator state names, and risk flags.
 - It intentionally excludes OHLC/history, current price, volume, market cap, stop-loss, cash target, numeric indicator metrics, and fundamentals.
+
+Public result documents contain 30 items each. `public_meta_v2_{MARKET}_manifest`
+contains `totalCount`, `chunkCount`, `pageSize`, and a compact
+map-based `{code, name, page}` search index so the browser fetches only pages
+needed for initial display, pagination, or search.
 
 ## `paper_performance_private/latest`
 

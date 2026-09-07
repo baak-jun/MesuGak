@@ -28,7 +28,7 @@ Continue implementation from `docs/WORKLOG.md`.
 2. Scoring and risk rules are scaffolded and covered by tests.
 3. Firestore repository boundaries and basic jobs are wired.
 4. Portfolio target and order generation are scaffolded and covered by tests.
-5. The frontend renders the strategy console from Firestore when Firebase env vars are configured, with mock fallback data for local development.
+5. The frontend renders 30-item aggregate-only public pages and keeps charts/raw values behind administrator access. Mock signals are development-only.
 
 ## Current Commands
 
@@ -89,7 +89,7 @@ Run a Firestore-free local smoke test:
 python Mesugak_V2\functions\jobs\smoke_test_flow.py
 ```
 
-Validate scheduled function environment values:
+Validate the school-server operator environment template:
 
 ```powershell
 python Mesugak_V2\functions\jobs\validate_scheduler_env.py
@@ -122,7 +122,8 @@ Set-Location Mesugak_V2\frontend
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-The frontend reads Firestore when these Vite env vars are configured, and falls back to mock data otherwise:
+The frontend reads Firestore when these Vite env vars are configured. Production
+does not replace missing or denied data with mock stock results:
 
 - `VITE_FIREBASE_API_KEY`
 - `VITE_FIREBASE_AUTH_DOMAIN`
@@ -137,11 +138,12 @@ Deploy V2 hosting and Firestore rules from `Mesugak_V2/`:
 firebase deploy --only hosting,firestore:rules
 ```
 
-Deploy scheduled Python functions too:
+The scheduled analysis and paper-trading jobs run on the school server, not as
+Firebase Functions. Copy the complete `Mesugak_V2\functions` directory there,
+install `functions\requirements.txt`, and keep the KIS/Firebase credentials in
+the server environment only.
 
-```powershell
-firebase deploy --only functions,hosting,firestore:rules
-```
-
-The scheduled paper flow runs weekdays at `08:30 UTC` (`17:30` Korea time). It can be configured with environment variables such as `MESUGAK_MAX_STOCKS`, `MESUGAK_MAX_POSITIONS`, `MESUGAK_MIN_CONFIDENCE`, and `MESUGAK_DRY_RUN`.
-See `functions/.env.example` for the full environment template.
+Run the school-server paper flow on the operator's weekday schedule. Analysis
+and flow-size controls are command-line options such as `--max-stocks`,
+`--max-positions`, and `--min-confidence`; credentials and paper-trading
+controls are kept in the protected `functions/.env` file.

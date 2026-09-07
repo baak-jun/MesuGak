@@ -28,6 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--checkpoint-dir", default=None)
     parser.add_argument("--reset-checkpoint", action="store_true")
     parser.add_argument("--meta-chunk-size", type=int, default=400)
+    parser.add_argument("--public-chunk-size", type=int, default=30)
     parser.add_argument("--progress-interval", type=int, default=25)
     parser.add_argument("--account-value", type=float, default=10_000_000)
     parser.add_argument("--initial-cash", type=float, default=10_000_000)
@@ -58,6 +59,7 @@ def run(args: argparse.Namespace) -> dict:
                 checkpoint_dir=args.checkpoint_dir,
                 reset_checkpoint=args.reset_checkpoint,
                 meta_chunk_size=args.meta_chunk_size,
+                public_chunk_size=args.public_chunk_size,
                 progress_interval=args.progress_interval,
                 dry_run=args.dry_run,
             )

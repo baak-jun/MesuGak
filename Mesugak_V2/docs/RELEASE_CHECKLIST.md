@@ -2,6 +2,9 @@
 
 ## Before Deploy
 
+- Review `docs/FIREBASE_COST_PLAN.md` and identify the expected Firebase product
+  and usage change. A deployment with unknown recurring cost does not proceed.
+
 - Run backend tests:
   - `python -m unittest discover -s Mesugak_V2\functions\tests`
 - Run Python compile check:
@@ -17,17 +20,21 @@
 ## First Deploy
 
 - Deploy with a small universe first:
-  - `MESUGAK_MAX_STOCKS=30`
-  - `MESUGAK_DRY_RUN=true`
-- Deploy:
-  - `firebase deploy --only functions,hosting,firestore:rules`
-- Check Cloud Functions logs for `scheduled_paper_flow`.
-- Confirm no production write happens while `MESUGAK_DRY_RUN=true`.
+  - `python Mesugak_V2\functions\jobs\run_paper_flow.py --market KR --max-stocks 30 --dry-run`
+- Deploy Hosting only unless a separately reviewed release truly changes rules
+  or indexes:
+  - `firebase deploy --only hosting`
+- Do not deploy Firebase Functions for V2. The school server owns scheduled
+  analysis and paper-account jobs.
+- Copy the complete `Mesugak_V2\functions` directory to the school server,
+  install `functions\requirements.txt`, and run the server-side job with the
+  protected KIS virtual-account/Firebase environment.
+- Confirm no production write happens with the `--dry-run` option.
 
 ## First Non-Dry Run
 
-- Set `MESUGAK_DRY_RUN=false`.
-- Keep `MESUGAK_MAX_STOCKS` small for the first non-dry run.
+- Remove `--dry-run` only after the rehearsal succeeds.
+- Keep `--max-stocks` small for the first non-dry run.
 - Confirm these collections are updated:
   - `stock_analysis`
   - `meta_data`
@@ -42,9 +49,9 @@
 
 ## After Validation
 
-- Increase `MESUGAK_MAX_STOCKS` gradually.
-- Watch Cloud Functions duration, memory, and failure logs.
-- Confirm frontend shows legal links and the no-live-data education screen by default. `public_analysis_meta` must remain administrator-only in deployed Firestore rules until the public data-rights gate is formally opened.
+- Increase `--max-stocks` gradually.
+- Watch school-server duration, upstream data-source failures, and failure logs.
+- Confirm frontend shows legal links and the no-live-data education screen by default. `public_analysis_meta` rules allow only the explicitly named `public_meta_v2_KR_{manifest|number}` documents; the frontend must keep the public-data gate disabled until the written data-rights review is complete.
 - Add README CI badge after the workflow is observed passing on GitHub.
 
 ## Compliance Gate
@@ -54,3 +61,4 @@
 - Before opening public data, retain the written approval reference, review the exact feeds/territories/delay conditions, set the explicit frontend gates, and deploy a reviewed Firestore-rules change in the same release.
 - Confirm the frontend legal links are visible: 개인정보처리방침, 이용약관, 면책고지, 데이터 사용 고지.
 - Do not enable real AdSense code until AdSense approval, `ads.txt`, privacy cookie disclosures, consent requirements, and data-display rights are all ready.
+- Keep separate AdSense unit IDs for authored learning pages and the optional generated-analysis placement. Confirm that no ad appears on list, loading, error, legal, administrator, or navigation screens.

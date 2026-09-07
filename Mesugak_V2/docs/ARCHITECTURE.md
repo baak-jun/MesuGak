@@ -6,7 +6,7 @@ V2 replaces the single Bollinger Band scanner with a strategy engine that scores
 
 ## Pipeline
 
-1. Load market universe and OHLCV data.
+1. Load the KR market universe and completed daily OHLCV through the Financial Services Commission public stock-price API.
 2. Calculate indicators.
 3. Score each stock.
 4. Detect risk states and cash-ratio requirements.
@@ -25,10 +25,13 @@ Implemented:
 - Stock analysis payload assembly compatible with V1 `stock_analysis` and `meta_data`.
 - Firestore repository boundary.
 - Basic analysis and rebalance jobs.
-- Full KR/US market universe loading.
+- Financial Services Commission public-data-backed KR market universe and completed daily OHLCV.
+- Financial Services Commission public index loading for optional KOSPI/KOSDAQ benchmark comparison.
+- Valuation/fundamental inputs are optional and are not part of the active public-data route.
+- KIS virtual-account access remains isolated to administrator-only paper-account jobs.
 - Local checkpoint/resume support for long analysis runs.
 - Reusable backtest simulation with N+1 trade execution.
-- Frontend strategy console with Firestore-backed signals, staged orders, and paper portfolio snapshot fallback.
+- Public aggregate-only 30-item pages/search manifest plus admin-only charts and raw analysis.
 
 Not implemented yet:
 

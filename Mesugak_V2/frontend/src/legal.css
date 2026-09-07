@@ -52,6 +52,7 @@
 }
 
 .compliance-dock a,
+.compliance-dock button,
 .legal-tabs a,
 .legal-home {
   border: 1px solid var(--border, #d3dde2);
@@ -64,13 +65,52 @@
   white-space: nowrap;
 }
 
+.compliance-dock button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
 .compliance-dock a:hover,
+.compliance-dock button:hover,
 .legal-tabs a:hover,
 .legal-tabs a.active,
 .legal-home:hover {
   border-color: var(--accent, #0f7f7a);
   background: var(--accent-soft, #e7f5f3);
   color: var(--accent, #0f7f7a);
+}
+
+.legal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  max-width: 980px;
+  margin: 16px auto 0;
+}
+
+.legal-actions button,
+.legal-actions a {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-bg);
+  color: var(--accent);
+  padding: 9px 13px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.legal-actions button {
+  cursor: pointer;
+}
+
+.legal-actions button:hover,
+.legal-actions a:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .legal-page {
@@ -83,11 +123,14 @@
 }
 
 .legal-hero,
-.legal-warning,
-.legal-card,
-.legal-tabs {
-  max-width: 980px;
+.legal-notice,
+.legal-tabs,
+.legal-sections,
+.legal-sources,
+.legal-actions {
+  width: min(100%, 980px);
   margin-inline: auto;
+  box-sizing: border-box;
 }
 
 .legal-hero {
@@ -135,23 +178,24 @@
   margin-top: 16px;
 }
 
-.legal-warning {
+.legal-notice {
   display: flex;
   gap: 10px;
-  border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
   border-radius: 18px;
-  background: color-mix(in srgb, var(--warning) 12%, var(--panel-bg));
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel-bg));
   margin-top: 16px;
   padding: 14px 16px;
   color: var(--text-soft);
+  box-sizing: border-box;
 }
 
-.legal-warning svg {
+.legal-notice svg {
   flex: 0 0 auto;
-  color: var(--warning);
+  color: var(--accent);
 }
 
-.legal-warning p {
+.legal-notice p {
   margin: 0;
   font-size: 13px;
   font-weight: 850;
@@ -160,16 +204,19 @@
 
 .legal-sections {
   display: grid;
+  align-items: stretch;
   gap: 14px;
   margin-top: 16px;
 }
 
 .legal-card {
+  width: 100%;
   border: 1px solid var(--border);
   border-radius: 20px;
   background: var(--panel-bg);
   padding: clamp(18px, 3vw, 24px);
   box-shadow: 0 14px 40px rgba(15, 23, 42, 0.06);
+  box-sizing: border-box;
 }
 
 .legal-card-title {
@@ -196,6 +243,7 @@
 }
 
 .legal-sources {
+  width: min(100%, 980px);
   margin-top: 14px;
 }
 
@@ -214,14 +262,87 @@
 
 @media (max-width: 760px) {
   .compliance-dock {
-    right: 10px;
-    bottom: 10px;
-    left: 10px;
+    position: static;
+    width: 100%;
+    max-width: 980px;
+    margin: 24px auto 0;
     grid-template-columns: 1fr;
   }
 
   .compliance-dock nav {
     justify-content: flex-start;
+  }
+
+  .legal-page {
+    padding: 18px 12px calc(32px + env(safe-area-inset-bottom));
+  }
+
+  .legal-hero {
+    border-radius: 18px;
+    padding: 22px 18px;
+  }
+
+  .legal-hero h1 {
+    font-size: clamp(32px, 12vw, 48px);
+  }
+
+  .legal-hero strong {
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  .legal-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 3px;
+    scrollbar-width: thin;
+  }
+
+  .legal-tabs a {
+    min-height: 40px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .legal-notice {
+    align-items: flex-start;
+    border-radius: 14px;
+    padding: 12px;
+  }
+
+  .legal-notice p {
+    font-size: 12.5px;
+  }
+
+  .legal-card {
+    border-radius: 16px;
+    padding: 17px 15px;
+  }
+
+  .legal-card-title h2 {
+    font-size: 17px;
+  }
+
+  .legal-card p,
+  .legal-sources a {
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+
+  .legal-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .legal-actions button,
+  .legal-actions a {
+    display: flex;
+    justify-content: center;
+    min-height: 44px;
+    align-items: center;
+    overflow-wrap: anywhere;
+    text-align: center;
   }
 }
 .ad-slot small {

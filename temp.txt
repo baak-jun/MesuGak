@@ -1,0 +1,88 @@
+﻿
+> function ScoreDock({ stock }) {
+    const [helpKey, setHelpKey] = useState(null);
+    const bollinger = stock.indicatorStates?.bollinger || stock.sortMetrics?.bollinger || {};
+    const detailRows = [
+      ['%B', numberAt(stock.sortMetrics, 'bollinger.percentB'), 2, componentMeta.bollinger.color],
+      ['諛대뱶??, numberAt(stock.sortMetrics, 'bollinger.bandwidth'), 3, componentMeta.bollinger.color],
+      ['MA20 愿대━??, numberAt(stock.sortMetrics, 'maSupport.priceToMa20Pct'), 2, componentMeta.maSupport.color],
+      ['援щ쫫? 愿대━??, numberAt(stock.sortMetrics, 'ichimoku.priceToCloudPct'), 2, componentMeta.ichimoku.color],
+      ['RSI 媛?, numberAt(stock.sortMetrics, 'rsi.rsi'), 1, componentMeta.rsi.color],
+    ];
+  
+    return (
+      <aside className="score-dock">
+        <section className="dock-section headline-score">
+          <span>李⑦듃 而⑤뵒???먯닔</span>
+          <strong className="glow-text">{formatNumber(stock.confidence, 1)}</strong>
+          <small>{stock.label}</small>
+          <p>?щ윭 湲곗닠吏?쒓? 媛숈? 諛⑺뼢??媛由ы궎???뺣룄瑜?援먯쑁???먯닔濡??쒗쁽?⑸땲??</p>
+        </section>
+        <section className="dock-section compact-stats">
+          <div><span>由ъ뒪??湲곗?媛</span><strong>{stock.stopLoss ? formatNumber(stock.stopLoss, stock.market === 'US' ? 2 
+: 0) : '-'}</strong></div>
+          <div><span>諛⑹뼱 ?꾧툑 鍮꾩쨷</span><strong>{stock.cashTarget}%</strong></div>
+          <div><span>蹂쇰┛? ?곹깭</span><strong className="state-text">{String(bollinger.state || '以묐┰').replaceAll('_', '
+ ')}</strong></div>
+          <div><span>諛대뱶??諛깅텇??/span><strong>{bollinger.bandwidthRank !== undefined ? `${formatNumber(Number(bollinger.
+bandwidthRank) * 100, 1)}%` : '-'}</strong></div>
+        </section>
+        <section className="dock-section">
+          <div className="dock-title"><Gauge size={16} /><span>?먯닔 ?붿냼</span></div>
+          <div className="score-bars">
+            {stock.components.length === 0 && <div className="empty-watch">?몃? ?먯닔 ?곗씠?곌? ?꾩쭅 ?놁뒿?덈떎.</div>}
+            {stock.components.map((component) => (
+              <div key={component.key} className="score-bar">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: component.color }}>{component.label}</span>
+                    {educationalGuides[component.key] && (
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setHelpKey(component.key); }} style=
+{{background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text-muted)', display: 'flex', align
+Items: 'center'}} title="?⑦꽩 湲곗? 蹂닿린">
+                        <HelpCircle size={13} />
+                      </button>
+                    )}
+                  <strong>{component.weight === -1 ? `媛먯젏 ${formatNumber(component.score, 1)}` : `${formatNumber(compon
+ent.score, 1)} 횞 ${formatNumber(Number(component.weight || 0) * 100, 0)}%`}</strong>
+                </div>
+                <meter min="0" max={component.max || 100} value={component.score || 0} style={{ '--meter-color': compon
+ent.color }} />
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="dock-section">
+          <div className="dock-title"><BarChart3 size={16} /><span>?몃? ?섏튂</span></div>
+          <div className="metric-grid">
+            {detailRows.map(([label, value, digits, color]) => <div key={label}><span style={{ color }}>{label}</span><
+strong>{value === null ? '-' : formatNumber(value, digits)}</strong></div>)}
+          </div>
+        </section>
+        <section className="dock-section">
+          <div className="dock-title"><Shield size={16} /><span>由ъ뒪???좏샇</span></div>
+          <div className="risk-list">
+            {stock.risks.map((risk) => <div key={`${risk.label}-${risk.value}`} className={`risk-row risk-${risk.state}
+`}><span>{risk.label}</span><strong>{risk.value}</strong></div>)}
+          </div>
+        </section>
+      </aside>
+    );
+  }
+  
+  const Candle = ({ x, o, c, h, l }) => {
+    const isUp = c <= o; // Y axis is inverted, so smaller Y means higher price
+    const color = isUp ? '#ef4444' : '#3b82f6';
+    const top = Math.min(o, c);
+    const bottom = Math.max(o, c);
+    const height = Math.max(bottom - top, 2);
+    return (
+      <g stroke={color}>
+        <line x1={x} y1={h} x2={x} y2={l} strokeWidth="1.5" />
+        <rect x={x - 3} y={top} width="6" height={height} fill={color} strokeWidth="1" stroke="none" />
+      </g>
+    );
+  };
+  
+  const educationalGuides = {
+
+

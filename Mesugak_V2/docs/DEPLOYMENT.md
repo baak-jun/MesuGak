@@ -11,49 +11,31 @@ Set-Location ..
 firebase deploy --only hosting,firestore:rules
 ```
 
-## Scheduled Paper Flow
+## School-server paper flow
 
-V2 includes a Python scheduled function in `functions/main.py`.
+V2 does not deploy the analysis worker as a Firebase Function. The school
+server owns Financial Services Commission public-data KR market analysis, KIS virtual-account credentials,
+paper orders, and Firestore writes. Upload the complete `Mesugak_V2\functions` directory, install its
+requirements, and run the jobs from that server with the protected environment
+file described in `docs\SCHOOL_SERVER_PAPER_TRADING.md`.
 
-- Function: `scheduled_paper_flow`
-- Schedule: `30 8 * * 1-5`
-- Effective Korea time: 17:30 on weekdays
-- Flow: analyze market -> generate rebalance orders -> apply paper orders
+The command-line flow controls are:
 
-Deploy:
+- `--market`, `--codes`, `--kr-markets`, `--max-stocks`
+- `--max-positions`, `--min-confidence`, `--dry-run`
+- `--skip-analysis`, `--skip-rebalance`, `--skip-apply`
 
-```powershell
-Set-Location Mesugak_V2
-firebase deploy --only functions,hosting,firestore:rules
+Start production validation with a small `--max-stocks` value, then increase
+after checking the school-server job duration and upstream data-source stability.
+
+Example command for a small first run:
+
+```bash
+python functions/jobs/run_paper_flow.py --market KR --kr-markets KOSPI --max-stocks 30 --max-positions 3 --min-confidence 65 --dry-run
 ```
 
-Runtime controls are environment variables:
-
-- `MESUGAK_MARKET`: default `KR`
-- `MESUGAK_CODES`: optional comma-separated explicit code list
-- `MESUGAK_KR_MARKETS`: default `KOSPI,KOSDAQ`
-- `MESUGAK_MAX_STOCKS`: default `300`
-- `MESUGAK_MAX_POSITIONS`: default `5`
-- `MESUGAK_MIN_CONFIDENCE`: default `65.0`
-- `MESUGAK_DRY_RUN`: default `false`
-- `MESUGAK_SKIP_ANALYSIS`: default `false`
-- `MESUGAK_SKIP_REBALANCE`: default `false`
-- `MESUGAK_SKIP_APPLY`: default `false`
-
-Start production validation with a small `MESUGAK_MAX_STOCKS` value, then increase after checking Cloud Functions duration and memory behavior.
-
-Example environment values for a small first run:
-
-```powershell
-MESUGAK_MARKET=KR
-MESUGAK_KR_MARKETS=KOSPI
-MESUGAK_MAX_STOCKS=30
-MESUGAK_MAX_POSITIONS=3
-MESUGAK_MIN_CONFIDENCE=65
-MESUGAK_DRY_RUN=true
-```
-
-See `functions/.env.example` for the full list of scheduler environment variables.
+See `functions/.env.example` for public-data, KIS virtual-account, Firebase, and paper-trading environment
+values. Never copy that file with real secrets into source control.
 
 ## Local Smoke Test
 
@@ -78,17 +60,18 @@ $env:GCLOUD_PROJECT="mesugak-v2-emulator"
 python Mesugak_V2\functions\jobs\emulator_smoke_flow.py
 ```
 
-## First Scheduler Deploy Checklist
+## First school-server rollout checklist
 
 - Run backend tests locally.
 - Run `smoke_test_flow.py`.
 - Run frontend build.
-- Deploy with `MESUGAK_DRY_RUN=true` or with `MESUGAK_MAX_STOCKS` set to a small value first.
-- Confirm Cloud Functions logs include `scheduled_paper_flow` result output.
+- Run the paper flow with `--dry-run --max-stocks 30` first.
+- Confirm the school-server log contains the analysis, rebalance, and apply
+  results before enabling the normal schedule.
 - Confirm no duplicate `appliedAllocationIds` are written for the same allocation.
 - Confirm `paper_order_applications/{allocationId}` is written after the first non-dry run.
 - Confirm frontend account snapshot shows `source: Mesugak_V2`.
-- Increase `MESUGAK_MAX_STOCKS` only after checking function duration and memory.
+- Increase `--max-stocks` only after checking job duration and upstream request failures.
 
 ## CI Verification
 
@@ -107,15 +90,15 @@ Current server-side Python queries use simple equality filters and should not re
 - `meta_data`: `market == MARKET`
 - `rebalance_orders`: `market == MARKET`, optionally `allocationId == ID`
 
-Current frontend queries use simple `in` filters without explicit ordering:
+Current frontend queries use simple equality filters without explicit ordering:
 
-- `meta_data`: `market in ["KR", "US"]`
-- `rebalance_orders`: `market in ["KR", "US"]`
+- `meta_data`: `market == "KR"`
+- `rebalance_orders`: `market == "KR"`
 
 If the frontend later adds server-side ordering or pagination on these collections, add matching composite indexes before deployment.
 
 ## Frontend Live-Data Safety Gate
 
-The production frontend defaults to a no-live-data education view. The deployed Firestore rule keeps `public_analysis_meta` administrator-only; a frontend environment value alone cannot expose it.
+The production frontend defaults to a no-live-data education view. Firestore permits anonymous `get` only for the explicitly named `public_meta_v2_KR_{manifest|number}` feed documents; all other analysis documents remain administrator-only. A frontend environment value alone cannot expose data that has not been published to those documents.
 
 Do not open public market-derived analysis or advertising until the written approval reference, exact public/commercial data-display scope, privacy/cookie requirements, and a reviewed Firestore-rules deployment have all been completed. `frontend/.env.example` documents the disabled-by-default gates.

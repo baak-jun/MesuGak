@@ -1,110 +1,94 @@
 # Data, Ads, and Legal Compliance Notes
 
-Last reviewed: 2026-07-13
+Last reviewed: 2026-09-01
 
-This note records the conservative compliance position for Mesugak V2 before public monetization.
-It is an engineering checklist and operating note, not a substitute for legal advice.
+This is an engineering/operating note, not legal advice.
 
-## Current data paths in the codebase
+## Production data path
 
-`functions/strategy_engine/market_data.py` currently loads:
+- KR symbol metadata and completed daily OHLCV are loaded through the Financial Services Commission `주식시세정보` public API.
+- KOSPI/KOSDAQ benchmark history is loaded through the Financial Services Commission `지수시세정보` public API when that API is approved for the service key.
+- Valuation and financial reference values are currently omitted from the active public-data route.
+- The daily analysis end date is yesterday, so an in-progress current-day candle is not included.
+- KIS is used only for the administrator's virtual-account balance, quotes, and orders; it is not the active public-analysis input.
 
-- Korean listings, market capitalization, and OHLCV through `FinanceDataReader.StockListing("KRX")` and `FinanceDataReader.DataReader(...)`.
-- Korean financial reference values through `FinanceDataReader.SnapDataReader("NAVER/FINSTATE/{code}")`.
-- US universe filters from Wikipedia tables for S&P 500 and Nasdaq-100 constituents.
-- Paper-trading balances and executions from Firestore and the operator's KIS mock-investment API integration.
+## Public/private boundary
 
-## Official policy findings
+The public `public_analysis_meta` feed is an allowlist, not a redacted copy of
+the private record. It contains:
 
-### KRX
+- stock identity and completed analysis date;
+- one proprietary aggregate score and a neutral alignment band;
+- categorical indicator states, reason codes, and risk flags.
 
-KRX's legal notice says KRX-provided data and analysis are for information purposes, not trading. It also states that KRX service copyrights and other intellectual-property rights belong to KRX, and that users may not reproduce, transmit, publish, distribute, broadcast, or redistribute KRX services to third parties without prior consent.
+It does not contain OHLC/history, current price, volume, market cap, component
+scores, %B, RSI values, relative volume, other numeric indicator inputs,
+stop-loss, cash targets, fundamentals, or order-like actions. Public documents
+contain 30 rows and a compact manifest/search index. `stock_analysis`,
+`meta_data`, account data, charts, and raw measurements remain admin-only.
 
-Engineering implication:
+Filtering and transforming data does not itself create a redistribution
+license. Keep the exact public-data API pages, utilization approvals, response
+date behavior, and the permitted public-display scope as release evidence.
 
-- Do not assume KRX-origin market data can be publicly redistributed or monetized.
-- Before public ad-supported display of KR quotes, charts, market capitalization, or derived screens that effectively re-display exchange data, obtain or confirm the appropriate KRX/Koscom/data-provider permission.
+## Provider findings
 
-Source: https://info.krx.co.kr/contents/KRX/06/06070200/KRX06070200.jsp
+The active stock-price and index datasets are provided through the Financial
+Services Commission public-data gateway and their portal pages currently show
+free use with no listed license restriction. Retain the API utilization
+approval and re-check the provider page when the service scope changes; this
+engineering note is not a legal opinion.
 
-### KIS Developers
+KIS personal-account access remains limited to the administrator's private
+virtual-account workflow and is not used to generate the public analysis feed.
 
-KIS Developers' partnership guide says third-party services using KIS OpenAPI should check whether they are partnership targets. For quote APIs, it specifically asks providers to confirm whether they have information-use agreements with KRX and overseas exchanges, and notes that a branded app screen using quote information can be restricted without the required market-data contract.
+- Financial Services Commission stock prices: https://www.data.go.kr/data/15094808/openapi.do
+- Financial Services Commission index prices: https://www.data.go.kr/data/15094807/openapi.do
+- KIS provider guide: https://apiportal.koreainvestment.com/provider
+- KRX legal notice: https://info.krx.co.kr/contents/KRX/06/06070200/KRX06070200.jsp
 
-Engineering implication:
+Before release, retain a non-secret approval/reference ID in:
 
-- Token success or API access does not equal permission to redistribute quote data in a public Mesugak screen.
-- The KIS paper-trading integration should remain an operator-side/private experiment unless account, order, and quote usage rights are separately confirmed.
+```dotenv
+VITE_ENABLE_PUBLIC_LIVE_DATA=true
+VITE_PUBLIC_DATA_RIGHTS_CONFIRMED=true
+VITE_PUBLIC_DATA_RIGHTS_APPROVAL_REFERENCE=internal-record-id
+VITE_PUBLIC_DATA_RULES_RELEASE_REFERENCE=release-id
+```
 
-Source: https://apiportal.koreainvestment.com/provider-info
+## Investment-information posture
 
-### Google AdSense
+- Describe results as automated indicator-condition summaries, not recommended stocks.
+- Use neutral bands such as condition alignment/caution, not public buy/sell actions.
+- State that scores summarize past/current inputs and do not predict direction or profit.
+- Do not provide one-to-one answers, user-specific portfolios, or interactive paid advice.
+- The user makes the final investment decision and bears the result.
 
-Google AdSense requires publishers to follow AdSense Program policies and Google Publisher Policies. Relevant points for Mesugak:
+Korean regulatory classification depends on the actual service, consideration,
+interaction, and marketing—not merely a disclaimer or the fact that a score is
+proprietary. Obtain Korean counsel before paid subscriptions, paid stock
+candidate access, chat/DM interaction, or personalized outputs.
 
-- Do not encourage or artificially generate ad clicks.
-- Do not make ads indistinguishable from content or navigation.
-- Do not monetize content that infringes intellectual-property rights.
-- Privacy policy text must disclose Google/third-party advertising cookies and opt-out choices when Google ads are active.
+- FSC 2021 interpretation examples: https://www.fsc.go.kr/no010101/75847
+- FSC 2024 investor-protection changes: https://www.fsc.go.kr/no010101/82887
+- Capital Markets Act Article 101-2: https://law.go.kr/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1032435905
 
-Engineering implication:
+## AdSense
 
-- Keep ad containers clearly labeled.
-- Do not add actual AdSense code until data rights, privacy policy, and account approval are ready.
-- Keep finance claims educational; avoid "guaranteed profit", "recommended buy", or similar framing.
+AdSense support remains in the application, but the browser loads it only when
+the public-data gate, legal/policy reference, approved account, exact real
+publisher and slot IDs, root ads.txt, and certified-CMP status all pass. The
+known example IDs are rejected. The current UI permits separate learning and
+optional analysis placements only after their respective content gates pass;
+list, empty/error, admin, legal, and navigation screens are ad-free. The
+generated-analysis placement can be disabled independently with
+`VITE_ENABLE_ANALYSIS_ADS=false`. Ads must be labelled, separated from controls,
+and must never be presented as an invitation to click.
 
-Sources:
+- Program policies: https://support.google.com/adsense/answer/48182
+- ads.txt: https://support.google.com/adsense/answer/12171612
+- CMP requirements: https://support.google.com/adsense/answer/13554116
 
-- https://support.google.com/adsense/answer/48182
-- https://support.google.com/adsense/answer/10502938
-- https://support.google.com/adsense/answer/1348695
-
-### Wikipedia/Wikimedia
-
-Wikipedia/Wikimedia content can generally be read and reused under free/open licenses, but reuse carries license and attribution responsibilities. Wikipedia content also does not constitute professional financial advice.
-
-Engineering implication:
-
-- If constituent-list data from Wikipedia is shown or redistributed, include attribution/license handling.
-- Using Wikipedia only as a backend universe filter is lower-risk than presenting copied tables as Mesugak-owned content, but public reuse still needs attribution review.
-
-Source: https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use
-
-## Current operating decision
-
-Until data-provider permissions are confirmed:
-
-1. Keep the service framed as "technical-indicator research / education / paper-trading experiment".
-2. Do not enable actual AdSense scripts or public ad placeholders.
-3. Keep `public_analysis_meta` administrator-only in Firestore rules. A frontend build flag alone is not an access-control mechanism.
-4. Keep production public live-data loading disabled. Reopening it requires written data-rights confirmation, a retained approval reference, all three frontend gate values, and a deliberate Firestore-rules deployment.
-5. Keep legal links visible:
-   - Privacy Policy
-   - Terms
-   - Disclaimer
-   - Data Use Notice
-6. Do not market the screen as stock recommendations, profit guarantees, or individualized investment advice.
-7. Treat public commercial redistribution of KR/US quote/chart/market-cap data as not yet cleared.
-
-## Public monetization checklist
-
-Before turning on public ads, paid subscriptions, or public user onboarding:
-
-- Confirm KRX/Koscom/KIS and any overseas exchange data-display rights in writing.
-- Confirm whether the specific displayed data is delayed, real-time, derived, or redistributable.
-- Confirm whether FinanceDataReader's upstream sources allow the intended public/commercial use.
-- Add required source attributions for any third-party content.
-- Keep `VITE_ENABLE_PUBLIC_LIVE_DATA=false`, `VITE_PUBLIC_DATA_RIGHTS_CONFIRMED=false`, and `VITE_ENABLE_ADSENSE=false` by default.
-- Before any public market-derived result is released, retain a written approval reference in `VITE_PUBLIC_DATA_RIGHTS_APPROVAL_REFERENCE`, review the exact permitted scope, and deliberately change the Firestore rule for `public_analysis_meta` in the same release.
-- Add `ads.txt` only after AdSense approval and after public data rights, privacy/cookie disclosures, and consent requirements are ready.
-- Update the privacy policy with active ad-cookie vendors and opt-out links.
-- Review whether paid "candidate" screens could trigger Korean 유사투자자문업, 투자자문업, 투자일임업, or financial-service partnership requirements.
-
-
-## Public result feed
-
-`public_analysis_meta` is a price-free derived-output feed: it must not contain raw price, OHLC/history, volume, market cap, raw indicator measurements, stop-loss, cash targets, or fundamentals. It is currently locked to administrators at the Firestore rule layer; the private `meta_data` and `stock_analysis` collections are also administrator-only.
-
-`paper_performance_private/latest` contains only an administrator-only aggregate comparison of the operator's KIS virtual-account return with KOSPI/KOSDAQ returns on the same baseline date. It excludes account numbers, positions, trade logs, and raw index levels. It must not be republished as a public performance claim without the same rights and legal review.
-
-Technical filtering reduces exposure but is not a license to redistribute market-data-derived content. Reconfirm source-specific rights before any public release, advertising, subscription, or monetization.
+Advertising revenue alone may be treated differently from direct consideration
+for investment advice, but it is not a blanket exemption. Do not tie ad access
+or ad removal to personalized recommendations without a fresh legal review.
