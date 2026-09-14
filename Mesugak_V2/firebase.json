@@ -13,11 +13,51 @@
       "**/.*",
       "**/node_modules/**"
     ],
-    "rewrites": [
+    "headers": [
       {
-        "source": "**",
-        "destination": "/index.html"
+        "source": "/assets/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public,max-age=31536000,immutable"
+          }
+        ]
+      },
+      {
+        "source": "/index.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
+      {
+        "source": "/ads.txt",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public,max-age=3600"
+          }
+        ]
       }
+    ],
+    "rewrites": [
+      { "source": "/", "destination": "/index.html" },
+      { "source": "/analysis", "destination": "/index.html" },
+      { "source": "/learn", "destination": "/index.html" },
+      { "source": "/learn/ichimoku", "destination": "/index.html" },
+      { "source": "/learn/bollinger", "destination": "/index.html" },
+      { "source": "/learn/moving-average", "destination": "/index.html" },
+      { "source": "/learn/rsi", "destination": "/index.html" },
+      { "source": "/learn/volume", "destination": "/index.html" },
+      { "source": "/learn/valuation", "destination": "/index.html" },
+      { "source": "/methodology", "destination": "/index.html" },
+      { "source": "/about", "destination": "/index.html" },
+      { "source": "/terms", "destination": "/index.html" },
+      { "source": "/privacy", "destination": "/index.html" },
+      { "source": "/data", "destination": "/index.html" },
+      { "source": "/disclaimer", "destination": "/index.html" }
     ]
   },
   "functions": {

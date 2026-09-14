@@ -28,9 +28,8 @@ This document is the running handoff list for continuing V2 work without re-aski
 - Implemented V1-compatible analysis payloads:
   - `stock_analysis/{MARKET}_{CODE}`
   - `meta_data/meta_v2_{MARKET}_{N}`
-- Implemented full market universe loading:
-  - KR through FinanceDataReader KRX listing
-  - US through S&P 500 and Nasdaq 100 constituent lists plus FDR exchange listings
+- Implemented the active KR market universe through the Financial Services
+  Commission public stock-price API. The current deployment does not run a US universe.
 - Implemented checkpoint/resume support for long analysis runs.
 - Fixed dry-run behavior so default `--dry-run` analysis does not read or write production checkpoint files.
 - Implemented rebalance target allocation and staged order generation.

@@ -12,7 +12,6 @@ SCORING_WEIGHTS = {
     "maSupport": 0.20,
     "ichimoku": 0.20,
     "rsi": 0.10,
-    "valuation": 0.15,
     "volume": 0.10,
 }
 
@@ -166,79 +165,6 @@ def classify_ma_support_state(df: pd.DataFrame, lookback: int = 60) -> dict[str,
     }
 
 
-def score_valuation(fundamentals: dict[str, Any] | None = None) -> dict[str, Any]:
-    data = fundamentals or {}
-    per = _num(data, "per", float("nan"))
-    pbr = _num(data, "pbr", float("nan"))
-    roe = _num(data, "roe", float("nan"))
-    debt_ratio = _num(data, "debtRatio", float("nan"))
-    operating_profit_growth = _num(data, "operatingProfitGrowth", float("nan"))
-    if all(pd.isna(value) for value in (per, pbr, roe, debt_ratio, operating_profit_growth)):
-        return {
-            "state": "NO_DATA",
-            "score": 0.0,
-            "reasons": ["valuation_data_missing"],
-        }
-
-    score = 0.0
-    reasons: list[str] = []
-    if not pd.isna(per):
-        if per <= 0:
-            score -= 35
-            reasons.append("negative_or_zero_earnings")
-        elif per <= 10:
-            score += 25
-            reasons.append("low_per")
-        elif per <= 20:
-            score += 15
-            reasons.append("reasonable_per")
-        elif per <= 35:
-            score += 5
-            reasons.append("elevated_but_positive_per")
-        elif per > 50:
-            score -= 15
-            reasons.append("high_per")
-    if not pd.isna(pbr):
-        if 0 < pbr <= 1.5:
-            score += 15
-            reasons.append("low_pbr")
-        elif pbr <= 3:
-            score += 7
-            reasons.append("reasonable_pbr")
-        elif pbr > 5:
-            score -= 10
-            reasons.append("high_pbr")
-    if not pd.isna(roe):
-        if roe >= 15:
-            score += 25
-            reasons.append("high_roe")
-        elif roe >= 8:
-            score += 12
-            reasons.append("positive_roe")
-        elif roe < 0:
-            score -= 25
-            reasons.append("negative_roe")
-    if not pd.isna(debt_ratio):
-        if debt_ratio <= 100:
-            score += 10
-            reasons.append("manageable_debt")
-        elif debt_ratio > 200:
-            score -= 15
-            reasons.append("high_debt")
-    if not pd.isna(operating_profit_growth):
-        if operating_profit_growth >= 10:
-            score += 10
-            reasons.append("operating_profit_growing")
-        elif operating_profit_growth <= -10:
-            score -= 10
-            reasons.append("operating_profit_shrinking")
-    return {
-        "state": "VALUED",
-        "score": round(_clamp(score, -100.0, 100.0), 2),
-        "reasons": reasons,
-    }
-
-
 def classify_ichimoku_state(df: pd.DataFrame) -> dict[str, Any]:
     if len(df) < 27:
         return {"state": "NO_DATA", "score": 0.0, "reasons": ["ichimoku_no_data"]}
@@ -309,6 +235,7 @@ def classify_volume_state(df: pd.DataFrame, bollinger_state: dict[str, Any]) -> 
 
 
 def score_latest(df: pd.DataFrame, fundamentals: dict[str, Any] | None = None) -> ScoreResult:
+    """Score technical signals; ``fundamentals`` is accepted for legacy callers only."""
     if df.empty:
         return ScoreResult(0.0, "NO_DATA", {}, ["no_data"], {"bollinger": {"state": "NO_DATA"}})
 
@@ -343,29 +270,28 @@ def score_latest(df: pd.DataFrame, fundamentals: dict[str, Any] | None = None) -
         penalty += 15
         reasons.append("penalty_below_lower_band")
 
-    valuation_state = score_valuation(fundamentals)
-    valuation = float(valuation_state.get("score", 0.0))
-    reasons.append(f"valuation_state_{valuation_state.get('state', 'UNKNOWN').lower()}")
-    reasons.extend([f"valuation_{reason}" for reason in valuation_state.get("reasons", [])])
-
     component_scores = {
         "ichimoku": _clamp(ichimoku, -100.0, 100.0),
         "maSupport": _clamp(ma_support, -100.0, 100.0),
         "bollinger": _clamp(bollinger, -100.0, 100.0),
         "rsi": _clamp(rsi_score, -100.0, 100.0),
-        "valuation": _clamp(valuation, -100.0, 100.0),
         "volume": _clamp(volume_score, -100.0, 100.0),
         "penalty": _clamp(penalty),
     }
-    confidence = (
-        component_scores["bollinger"] * SCORING_WEIGHTS["bollinger"]
-        + component_scores["maSupport"] * SCORING_WEIGHTS["maSupport"]
-        + component_scores["ichimoku"] * SCORING_WEIGHTS["ichimoku"]
-        + component_scores["rsi"] * SCORING_WEIGHTS["rsi"]
-        + component_scores["valuation"] * SCORING_WEIGHTS["valuation"]
-        + component_scores["volume"] * SCORING_WEIGHTS["volume"]
-        - component_scores["penalty"]
-    )
+
+    active_weights = {}
+    if ichimoku_state.get("state") != "NO_DATA": active_weights["ichimoku"] = SCORING_WEIGHTS["ichimoku"]
+    if ma_state.get("state") != "NO_DATA": active_weights["maSupport"] = SCORING_WEIGHTS["maSupport"]
+    if bollinger_state.get("state") != "NO_DATA": active_weights["bollinger"] = SCORING_WEIGHTS["bollinger"]
+    if rsi_state.get("state") != "NO_DATA": active_weights["rsi"] = SCORING_WEIGHTS["rsi"]
+    if volume_state.get("state") != "NO_DATA": active_weights["volume"] = SCORING_WEIGHTS["volume"]
+    total_weight = sum(active_weights.values())
+    confidence = 0.0
+    if total_weight > 0:
+        for key, weight in active_weights.items():
+            confidence += component_scores[key] * (weight / total_weight)
+
+    confidence -= component_scores["penalty"]
     confidence = round(_clamp(confidence), 2)
 
     bollinger_name = str(bollinger_state.get("state", "UNKNOWN"))
@@ -384,9 +310,9 @@ def score_latest(df: pd.DataFrame, fundamentals: dict[str, Any] | None = None) -
         and component_scores["penalty"] < 15
     )
 
-    valuation_has_data = valuation_state.get("state") == "VALUED"
-    strong_threshold = 78.0 if valuation_has_data else 68.0
-    buy_threshold = 70.0 if valuation_has_data else 62.0
+    # Use unified thresholds now that scores are normalized
+    strong_threshold = 75.0
+    buy_threshold = 60.0
 
     if confidence >= strong_threshold and high_quality_setup:
         label = "STRONG_BUY"
@@ -402,5 +328,5 @@ def score_latest(df: pd.DataFrame, fundamentals: dict[str, Any] | None = None) -
         label,
         component_scores,
         reasons,
-        {"bollinger": bollinger_state, "maSupport": ma_state, "ichimoku": ichimoku_state, "rsi": rsi_state, "volume": volume_state, "valuation": valuation_state},
+        {"bollinger": bollinger_state, "maSupport": ma_state, "ichimoku": ichimoku_state, "rsi": rsi_state, "volume": volume_state},
     )

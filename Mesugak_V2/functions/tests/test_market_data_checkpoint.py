@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from strategy_engine.checkpoints import LocalCheckpointManager, MemoryCheckpointManager
-from strategy_engine.market_data import _normalize_us_symbol_for_fdr, targets_from_codes
+from strategy_engine.market_data import KR_INDEX_NAMES, targets_from_codes
 
 
 class MarketDataCheckpointTests(unittest.TestCase):
@@ -15,8 +15,8 @@ class MarketDataCheckpointTests(unittest.TestCase):
         self.assertEqual([target.code for target in targets], ["005930", "NVDA"])
         self.assertEqual([target.name for target in targets], ["005930", "NVDA"])
 
-    def test_normalize_us_symbol_for_fdr_matches_yahoo_style_class_symbols(self) -> None:
-        self.assertEqual(_normalize_us_symbol_for_fdr("brk.b"), "BRK-B")
+    def test_public_index_names_match_api_labels(self) -> None:
+        self.assertEqual(KR_INDEX_NAMES, {"KOSPI": "코스피", "KOSDAQ": "코스닥"})
 
     def test_checkpoint_records_success_and_resumes_done_codes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

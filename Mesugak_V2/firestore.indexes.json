@@ -1,4 +1,12 @@
 {
   "indexes": [],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    { "collectionGroup": "strategy_candidates", "fieldPath": "*", "indexes": [] },
+    { "collectionGroup": "stock_analysis", "fieldPath": "history", "indexes": [] },
+    { "collectionGroup": "stock_analysis", "fieldPath": "signal", "indexes": [] },
+    { "collectionGroup": "stock_analysis", "fieldPath": "indicatorStates", "indexes": [] },
+    { "collectionGroup": "stock_analysis", "fieldPath": "confidenceReasons", "indexes": [] },
+    { "collectionGroup": "meta_data", "fieldPath": "list", "indexes": [] },
+    { "collectionGroup": "public_analysis_meta", "fieldPath": "*", "indexes": [] }
+  ]
 }

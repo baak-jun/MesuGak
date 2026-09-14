@@ -4,8 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "vite --configLoader runner",
+    "monetization:check": "node scripts/check-monetization-gate.mjs",
+    "test:policy": "node --test scripts/content-policy.test.mjs",
+    "test:static": "node --test scripts/static-pages.test.mjs",
+    "ads:txt": "node scripts/write-ads-txt.mjs",
+    "prebuild": "npm run monetization:check",
+    "build": "vite build --configLoader runner",
+    "postbuild": "node scripts/prerender.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -26,4 +32,3 @@
     "globals": "^16.5.0"
   }
 }
-

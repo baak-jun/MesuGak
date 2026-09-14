@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+from datetime import date
 from pathlib import Path
 
 FUNCTIONS_DIR = Path(__file__).resolve().parents[1]
@@ -39,5 +40,33 @@ class IntradayPolicyTests(unittest.TestCase):
         self.assertTrue(any(order["side"] == "BUY" and order["code"] == "NEW" for order in orders))
 
 
+    def test_same_day_exit_lock_blocks_reentry(self) -> None:
+        candidates = [{"code": "LOCKED", "confidenceScore": 90, "status": "BUY_CANDIDATE"}]
+        orders = build_intraday_orders(candidates, {}, 10_000, 10_000, {"LOCKED": 100}, entry_blocked_codes={"LOCKED"})
+        self.assertEqual(orders, [])
+
+    def test_profit_lock_exits_after_small_gain_retraces_from_high(self) -> None:
+        positions = {"GAIN": {"code": "GAIN", "name": "Gain", "quantity": 10, "buyPrice": 100, "highestPrice": 105}}
+        candidates = [{"code": "GAIN", "confidenceScore": 70}]
+        config = IntradayPolicyConfig(profit_lock_activate_pct=0.03, profit_lock_trailing_pct=0.02, profit_lock_min_pnl_pct=0.005)
+        orders = build_intraday_orders(candidates, positions, 10_000, 0, {"GAIN": 102.5}, config)
+        self.assertEqual([(order["side"], order["reason"]) for order in orders], [("SELL", "profit_lock_trailing_stop")])
+    def test_same_day_stop_loss_exits_only_the_position_opened_today(self) -> None:
+        positions = {
+            "TODAY": {"code": "TODAY", "name": "Today", "quantity": 10, "buyPrice": 100, "highestPrice": 100, "boughtAt": "2026-07-14T09:01:00+09:00"},
+            "OLDER": {"code": "OLDER", "name": "Older", "quantity": 10, "buyPrice": 100, "highestPrice": 100, "boughtAt": "2026-07-13T09:01:00+09:00"},
+        }
+        candidates = [{"code": "TODAY", "confidenceScore": 70}, {"code": "OLDER", "confidenceScore": 70}]
+
+        orders = build_intraday_orders(
+            candidates,
+            positions,
+            10_000,
+            0,
+            {"TODAY": 97, "OLDER": 97},
+            session_date=date(2026, 7, 14),
+        )
+
+        self.assertEqual([(order["side"], order["code"], order["reason"]) for order in orders], [("SELL", "TODAY", "same_day_stop_loss")])
 if __name__ == "__main__":
     unittest.main()

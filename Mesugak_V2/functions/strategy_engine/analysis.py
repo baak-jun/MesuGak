@@ -67,11 +67,7 @@ def _relative_pct(numerator: float, denominator: float) -> float:
     return round((numerator / denominator - 1.0) * 100.0, 4)
 
 
-    value = _clean_number(row.get(key))
-    return default if value is None else value
-
-
-def build_history(df: pd.DataFrame, limit: int = 260) -> list[dict[str, Any]]:
+def build_history(df: pd.DataFrame, limit: int = 130) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     recent = df.tail(limit).copy()
 
@@ -101,6 +97,7 @@ def analyze_stock(
     df: pd.DataFrame,
     identity: StockIdentity,
     fundamentals: dict[str, Any] | None = None,
+    history_limit: int = 130,
 ) -> dict[str, Any] | None:
     if df is None or df.empty or len(df) < 120:
         return None
@@ -111,7 +108,7 @@ def analyze_stock(
 
     score = score_latest(enriched, fundamentals=fundamentals)
     risk = evaluate_risk(enriched)
-    history = build_history(enriched)
+    history = build_history(enriched, limit=history_limit)
     current_price = _latest_number(latest, "close")
     bandwidth = _latest_number(latest, "bb_bandwidth")
     percent_b = _latest_number(latest, "bb_percent_b")
@@ -234,3 +231,46 @@ def to_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "indicatorStates",
     ]
     return {key: payload.get(key) for key in keys}
+
+
+def to_public_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return a price-free explanation of an analysis result for public display.
+
+    This is deliberately not a redacted version of ``to_summary``: fields that
+    expose raw market data or the input values of an indicator are never copied
+    into the public payload in the first place.
+    """
+
+    indicator_states: dict[str, dict[str, Any]] = {}
+    for key, value in (payload.get("indicatorStates") or {}).items():
+        if not isinstance(value, dict):
+            continue
+        indicator_states[str(key)] = {
+            "state": value.get("state"),
+            "reasons": list(value.get("reasons") or []),
+        }
+
+    signal = payload.get("signal") or {}
+    private_label = str(payload.get("confidenceLabel") or "")
+    public_band = {
+        "STRONG_BUY": "HIGH_ALIGNMENT",
+        "BUY_CANDIDATE": "MODERATE_ALIGNMENT",
+        "WATCH": "LIMITED_ALIGNMENT",
+        "HOLD": "LIMITED_ALIGNMENT",
+        "DEFENSIVE": "CAUTION",
+        "AVOID": "CAUTION",
+    }.get(private_label, "LIMITED_ALIGNMENT")
+    return {
+        "id": payload.get("id"),
+        "code": payload.get("code"),
+        "name": payload.get("name"),
+        "market": payload.get("market"),
+        "strategyVersion": payload.get("strategyVersion"),
+        "analysisDate": payload.get("lastDate"),
+        "confidenceScore": payload.get("confidenceScore"),
+        "confidenceLabel": public_band,
+        "confidenceReasons": list(payload.get("confidenceReasons") or signal.get("reasons") or []),
+        "indicatorStates": indicator_states,
+        "riskState": payload.get("riskState"),
+        "riskFlags": list(payload.get("riskFlags") or []),
+    }

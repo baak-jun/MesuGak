@@ -10,9 +10,9 @@ FUNCTIONS_DIR = Path(__file__).resolve().parents[1]
 if str(FUNCTIONS_DIR) not in sys.path:
     sys.path.insert(0, str(FUNCTIONS_DIR))
 
-from strategy_engine.analysis import StockIdentity, analyze_stock, to_summary  # noqa: E402
+from strategy_engine.analysis import StockIdentity, analyze_stock, to_public_summary, to_summary  # noqa: E402
 from strategy_engine.risk import evaluate_risk  # noqa: E402
-from strategy_engine.scoring import classify_bollinger_state, classify_ma_support_state, score_latest, score_valuation  # noqa: E402
+from strategy_engine.scoring import classify_bollinger_state, classify_ma_support_state, score_latest  # noqa: E402
 
 
 def scoring_rows(overrides: dict | None = None) -> pd.DataFrame:
@@ -194,13 +194,23 @@ class ScoringRiskAnalysisTests(unittest.TestCase):
         self.assertEqual(state["state"], "LOWER_BAND_CROSS_BELOW_MA60")
         self.assertLess(state["score"], 0)
 
-    def test_valuation_scores_real_fundamentals_and_penalizes_weak_finances(self) -> None:
-        strong = score_valuation({"per": 9, "pbr": 1.2, "roe": 18, "debtRatio": 80, "operatingProfitGrowth": 12})
-        weak = score_valuation({"per": -5, "pbr": 6, "roe": -4, "debtRatio": 240, "operatingProfitGrowth": -15})
+    def test_fundamentals_do_not_affect_technical_confidence_score(self) -> None:
+        frame = scoring_rows({"bb_percent_b": 0.62, "close": 106.0, "bb_upper": 112.0})
+        without_fundamentals = score_latest(frame)
+        strong_fundamentals = score_latest(
+            frame,
+            fundamentals={"per": 9, "pbr": 1.2, "roe": 18, "debtRatio": 80, "operatingProfitGrowth": 12},
+        )
+        weak_fundamentals = score_latest(
+            frame,
+            fundamentals={"per": -5, "pbr": 6, "roe": -4, "debtRatio": 240, "operatingProfitGrowth": -15},
+        )
 
-        self.assertEqual(strong["state"], "VALUED")
-        self.assertGreater(strong["score"], 0)
-        self.assertLess(weak["score"], 0)
+        self.assertEqual(without_fundamentals, strong_fundamentals)
+        self.assertEqual(without_fundamentals, weak_fundamentals)
+        self.assertNotIn("valuation", without_fundamentals.component_scores)
+        self.assertNotIn("valuation", without_fundamentals.indicator_states or {})
+        self.assertFalse(any(reason.startswith("valuation") for reason in without_fundamentals.reasons))
 
     def test_strong_buy_requires_high_quality_bollinger_setup(self) -> None:
         result = score_latest(scoring_rows({"bb_percent_b": 0.62, "close": 106.0, "bb_upper": 112.0}))
@@ -261,6 +271,15 @@ class ScoringRiskAnalysisTests(unittest.TestCase):
         self.assertIn("sortMetrics", summary)
         self.assertIn("bollinger", summary["sortMetrics"])
         self.assertIn("percentB", summary["sortMetrics"]["bollinger"])
+
+        public_summary = to_public_summary(payload)
+        self.assertEqual(public_summary["id"], payload["id"])
+        self.assertIn("confidenceReasons", public_summary)
+        self.assertIn("indicatorStates", public_summary)
+        self.assertEqual(set(public_summary["indicatorStates"]["bollinger"]), {"state", "reasons"})
+        self.assertIn(public_summary["confidenceLabel"], {"HIGH_ALIGNMENT", "MODERATE_ALIGNMENT", "LIMITED_ALIGNMENT", "CAUTION"})
+        for sensitive_key in ("history", "currentPrice", "volume", "marcap", "bandwidth", "percentB", "cashTargetPct", "stopLoss", "fundamentals", "componentScores", "sortMetrics", "signal", "status", "type"):
+            self.assertNotIn(sensitive_key, public_summary)
 
     def test_analyze_stock_rejects_short_history(self) -> None:
         payload = analyze_stock(

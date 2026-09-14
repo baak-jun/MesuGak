@@ -9,14 +9,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "jobs"))
 from validate_scheduler_env import load_env, validate_env  # noqa: E402
 
 
+ENV_EXAMPLE = Path(__file__).resolve().parents[1] / ".env.example"
+
+
 class SchedulerEnvTests(unittest.TestCase):
     def test_env_example_is_valid(self) -> None:
-        values = load_env("Mesugak_V2/functions/.env.example")
+        values = load_env(str(ENV_EXAMPLE))
 
         self.assertEqual(validate_env(values), [])
 
     def test_invalid_env_reports_errors(self) -> None:
-        values = load_env("Mesugak_V2/functions/.env.example")
+        values = load_env(str(ENV_EXAMPLE))
         values["MESUGAK_MARKET"] = "JP"
         values["MESUGAK_MAX_STOCKS"] = "many"
         values["MESUGAK_DRY_RUN"] = "maybe"

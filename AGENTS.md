@@ -1,5 +1,15 @@
 # Mesugak Agent Harness
 
+## Persistent Project Workflow
+
+For MesuGak planning and implementation, read the personal skill at
+`C:/Users/baak_jun/.codex/skills/mesugak-project-workflow/SKILL.md` when available.
+It captures established cost, data, learning-content, and responsive-UI decisions.
+Use `Mesugak_V2/docs/PROJECT_EXECUTION_PLAN.md` for the current execution boundary.
+The user's newest request overrides historical plans; the skill grants no extra
+deployment, deletion, or billing authority. If unavailable on another machine,
+use the repository plan and report the missing skill without recreating it.
+
 This repository is split into two project folders.
 
 - `Mesugak_V1/` is the preserved legacy implementation. Treat it as reference material unless the user explicitly asks to modify V1.

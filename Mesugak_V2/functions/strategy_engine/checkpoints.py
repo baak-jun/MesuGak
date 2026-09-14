@@ -87,6 +87,12 @@ class LocalCheckpointManager:
     def snapshot(self) -> dict[str, Any]:
         return copy.deepcopy(self.state)
 
+    def set_metadata(self, **values: Any) -> None:
+        """Persist run identity used to validate resumable local analysis."""
+        self.state.update(values)
+        self.state["updatedAt"] = now_iso()
+        self._atomic_write()
+
     def done_codes(self) -> set[str]:
         return {str(code) for code in self.state.get("doneCodes", [])}
 
@@ -166,6 +172,10 @@ class MemoryCheckpointManager:
 
     def snapshot(self) -> dict[str, Any]:
         return copy.deepcopy(self.state)
+
+    def set_metadata(self, **values: Any) -> None:
+        self.state.update(values)
+        self.state["updatedAt"] = now_iso()
 
     def done_codes(self) -> set[str]:
         return set()

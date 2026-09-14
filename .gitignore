@@ -2,6 +2,13 @@ node_modules/
 dist/
 .firebase/
 
+# Local review and document-generation artifacts
+/output/pdf/
+/tmp/pdfs/
+patch_keys.py
+temp*.txt
+test_norm.py
+
 # Runtime files
 *.log
 runtime/
@@ -11,6 +18,7 @@ runtime/
 .env
 .env.*
 !.env.example
+!.env.server.example
 serviceAccountKey.json
 
 # Python
