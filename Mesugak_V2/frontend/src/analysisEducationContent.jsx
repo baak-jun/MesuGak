@@ -15,12 +15,12 @@
 export const educationUiCopy = {
   reasonModalTitle: '조건 상세 설명',
   reasonMeaningLabel: '조건의 뜻',
-  reasonInterpretationLabel: '볼 수 있는 이유',
-  reasonCheckLabel: '확인하면 좋을 것',
+  reasonInterpretationLabel: '해석 포인트',
+  reasonCheckLabel: '함께 확인할 점',
   guideTitleSuffix: '읽는 법',
-  guideIntro: '이 지표에서 자주 나타나는 패턴과 기준 점수입니다. 캔들과 지표 선의 움직임을 자세히 확인해 보세요.',
-  disclaimerTitle: '교육용 해설 안내',
-  disclaimerText: '이 내용은 기술지표를 읽는 방법을 설명해요. 하나의 조건만으로 매수·매도·보유 판단을 확정하지 말고, 다른 지표와 시장 상황을 함께 살펴보세요.',
+  guideIntro: '이 지표에서 자주 나타나는 핵심 패턴과 판정 기준입니다. 캔들과 지표 선의 위치 관계를 비교해 보세요.',
+  disclaimerTitle: '조합 해석 팁',
+  disclaimerText: '단일 조건만으로 방향성을 단정하기보다 추세·변동성·모멘텀·거래량 등 다른 성격의 지표가 함께 뒷받침하는지 대조해 보세요.',
 };
 
 const analysisReasonLabels = {
@@ -94,44 +94,7 @@ export function publicReasonLabel(value) {
 }
 
 function friendlyInterpretation(value) {
-  const text = String(value || '');
-  const endings = [
-    [/사용할 수 있습니다\.$/, '활용할 수도 있어요.'],
-    [/해석할 수 있습니다\.$/, '해석할 수도 있어요.'],
-    [/볼 수 있습니다\.$/, '볼 수도 있어요.'],
-    [/될 수 있습니다\.$/, '될 수도 있어요.'],
-    [/할 수 있습니다\.$/, '할 수도 있어요.'],
-    [/해석합니다\.$/, '해석할 수도 있어요.'],
-    [/경고로 봅니다\.$/, '경고로 읽을 수도 있어요.'],
-    [/로 봅니다\.$/, '로 볼 수도 있어요.'],
-    [/경계합니다\.$/, '주의해서 살펴볼 수도 있어요.'],
-    [/경고합니다\.$/, '주의 신호로 읽을 수도 있어요.'],
-    [/근거가 됩니다\.$/, '근거가 될 수도 있어요.'],
-    [/근거입니다\.$/, '근거로 볼 수도 있어요.'],
-    [/보조합니다\.$/, '보조할 수도 있어요.'],
-    [/반영합니다\.$/, '반영할 수도 있어요.'],
-    [/사용합니다\.$/, '활용할 수도 있어요.'],
-    [/높입니다\.$/, '높여 볼 수도 있어요.'],
-    [/둡니다\.$/, '볼 수도 있어요.'],
-    [/필요합니다\.$/, '필요할 수도 있어요.'],
-    [/제외합니다\.$/, '제외해요.'],
-    [/되지 않습니다\.$/, '되지 않아요.'],
-    [/하지 않습니다\.$/, '하지 않아요.'],
-    [/있습니다\.$/, '있어요.'],
-    [/없습니다\.$/, '없어요.'],
-    [/뜻입니다\.$/, '뜻이에요.'],
-    [/의미입니다\.$/, '의미예요.'],
-    [/상태입니다\.$/, '상태예요.'],
-    [/조건입니다\.$/, '조건이에요.'],
-    [/안전장치입니다\.$/, '안전장치예요.'],
-    [/했습니다\.$/, '했어요.'],
-    [/됐습니다\.$/, '됐어요.'],
-    [/됩니다\.$/, '될 수도 있어요.'],
-    [/합니다\.$/, '해요.'],
-    [/봅니다\.$/, '볼 수도 있어요.'],
-  ];
-  const ending = endings.find(([pattern]) => pattern.test(text));
-  return ending ? text.replace(ending[0], ending[1]) : text;
+  return String(value || '');
 }
 
 const reasonLesson = (label, meaning, interpretation, check) => ({
@@ -261,24 +224,23 @@ export function publicStateLabel(state) {
 
 export function publicStateExplanation(key, state) {
   const normalized = String(state || '').toUpperCase();
-  if (key === 'valuation') return 'PER·PBR·ROE·부채비율은 점수에 반영하지 않는 참고값입니다. 업종, 기간, 성장률, 최신 공시와 함께 읽는 방법만 안내합니다.';
-  if (normalized === 'NO_DATA') return '계산에 필요한 일봉이나 유효값이 아직 충분하지 않아요. 약한 신호가 아니라 이번에는 판단을 보류한 상태라고 읽으면 돼요.';
-  if (key === 'ichimoku' && normalized === 'BULLISH') return '구름대 위 위치와 전환선·기준선의 배열이 현재 추세 환경을 긍정적으로 뒷받침한다고 해석할 수도 있어요.';
-  if (key === 'ichimoku' && normalized === 'BEARISH') return '가격과 균형선의 배열이 약한 쪽에 더 가까워, 구름대가 지지보다 저항으로 작용할 가능성을 살펴볼 수 있어요.';
-  if (key === 'bollinger' && normalized === 'SQUEEZE_RELEASE_UP') return '변동성이 줄었던 구간 뒤에 밴드가 위쪽으로 넓어져, 새로운 상승 흐름이 시작되는 후보라고 해석할 수도 있어요.';
-  if (key === 'bollinger' && normalized === 'DOWNSIDE_EXPANSION') return '가격이 하단 밴드 밖으로 밀리는 동안 변동성도 커져, 매도 압력이 강해지는 흐름이라고 해석할 수도 있어요.';
-  if (key === 'bollinger' && normalized === 'FAILED_RELEASE') return '상단 밴드를 넘었던 힘이 이어지지 못해, 돌파의 지속성이 약해졌다고 해석할 수도 있어요.';
-  if (key === 'bollinger' && normalized === 'EXPANSION_CURL_NEUTRAL') return '넓어지던 밴드의 힘이 둔해져, 강한 움직임이 잠시 쉬어 가는 구간이라고 볼 수도 있어요.';
-  if (key === 'maSupport' && normalized === 'LOWER_BAND_CROSS_ABOVE_MA60') return '가격 변동 범위의 낮은 경계까지 60일선 위로 올라와, 중기 지지 환경이 개선되는 초기 모습이라고 볼 수도 있어요.';
-  if (key === 'maSupport' && normalized === 'LOWER_BAND_ABOVE_MA60') return '가격이 흔들릴 수 있는 범위의 아래쪽도 60일선 위에 있어, 중기 지지 환경이 이어진다고 해석할 수도 있어요.';
-  if (key === 'maSupport' && normalized === 'LOWER_BAND_CROSS_BELOW_MA60') return '가격 변동 범위가 60일선 아래까지 열리기 시작해, 중기 지지가 약해지는 모습이라고 볼 수도 있어요.';
-  if (key === 'rsi' && normalized === 'BULLISH') return '최근 상승폭의 힘이 하락폭보다 상대적으로 커져, 가격 모멘텀이 회복되는 과정이라고 해석할 수도 있어요.';
-  if (key === 'rsi' && normalized === 'BEARISH') return '가격을 밀어 올리는 힘이 이전보다 약해져, 단기 모멘텀이 식는 과정이라고 해석할 수도 있어요.';
-  if (key === 'volume' && normalized === 'BREAKOUT_CONFIRMED') return '가격이 최근 고점을 넘을 때 평소보다 많은 거래가 함께 들어와, 돌파에 참여가 실렸다고 해석할 수도 있어요.';
-  if (key === 'volume' && normalized === 'SQUEEZE_RELEASE_WEAK_VOLUME') return '가격은 위쪽으로 움직였지만 거래 참여가 충분히 늘지 않아, 돌파의 힘을 조금 더 확인해야 하는 상태라고 볼 수도 있어요.';
-  if (key === 'volume' && normalized === 'NEUTRAL') return '거래량이 현재 가격 움직임을 강하게 뒷받침하거나 약화시키지 않아, 참여 강도는 중립이라고 볼 수도 있어요.';
-  if (key === 'valuation' && normalized === 'VALUED') return '이 교실은 PBR 0 초과~1.5 이하를 낮은 참고 구간, 1.5 초과~3 이하를 중간 참고 구간, 5 초과를 높은 참고 구간으로 두고 PER·ROE·부채·영업이익 성장과 함께 기술적 흐름을 보충한다고 해석할 수도 있어요.';
-  if ((key === 'maSupport' || key === 'rsi') && normalized === 'NEUTRAL') return '현재는 한 방향의 힘이 뚜렷하지 않아, 다음 분석에서 회복과 약화 중 어느 쪽이 먼저 강해지는지 지켜볼 수 있어요.';
+  if (key === 'valuation') return 'PER·PBR·ROE·부채비율은 기술적 종합점수와 별개로 기업의 기초 체력을 점검하는 참고 지표입니다. 동종 업종 평균 및 최근 실적 추이와 함께 비교해 보세요.';
+  if (normalized === 'NO_DATA') return '계산에 필요한 최소 일봉 기간이나 유효값이 아직 확보되지 않아 판정을 보류한 상태입니다(해당 지표 가중치는 총점 계산에서 제외).';
+  if (key === 'ichimoku' && normalized === 'BULLISH') return '주가가 구름대 위에 위치하고 전환선·기준선의 배열이 우호적이어서 상승 추세 환경이 유지되는 흐름을 보여줍니다.';
+  if (key === 'ichimoku' && normalized === 'BEARISH') return '주가와 균형선의 배열이 약세 쪽에 가까워 구름대가 지지보다 저항대로 작용할 가능성이 높은 구간입니다.';
+  if (key === 'bollinger' && normalized === 'SQUEEZE_RELEASE_UP') return '변동성이 줄었던 수축 구간을 지나 밴드가 위쪽으로 열리며 새로운 상승 추세가 시작되는 흐름을 보여줍니다.';
+  if (key === 'bollinger' && normalized === 'DOWNSIDE_EXPANSION') return '주가가 하단 밴드 밖으로 밀리는 동시에 변동성이 확대되어 하방 매도 압력이 커지는 구간입니다.';
+  if (key === 'bollinger' && normalized === 'FAILED_RELEASE') return '상단 밴드를 돌파했던 흐름이 유지되지 못하고 밴드 안으로 되밀려 단기 돌파 탄력이 약해진 상태입니다.';
+  if (key === 'bollinger' && normalized === 'EXPANSION_CURL_NEUTRAL') return '확장되던 밴드의 기울기가 완만해지며 강한 변동성 국면이 숨 고르기에 들어간 구간입니다.';
+  if (key === 'maSupport' && normalized === 'LOWER_BAND_CROSS_ABOVE_MA60') return '볼린저 하단 밴드까지 60일 이동평균선 위로 올라서며 중기 가격 지지선이 높아지는 초기 흐름을 보여줍니다.';
+  if (key === 'maSupport' && normalized === 'LOWER_BAND_ABOVE_MA60') return '통상적인 가격 변동 범위의 하단이 60일 이동평균선 위에 자리 잡아 중기 추세 지지 환경이 유지되고 있습니다.';
+  if (key === 'maSupport' && normalized === 'LOWER_BAND_CROSS_BELOW_MA60') return '볼린저 하단 밴드가 60일 이동평균선 아래로 내려오며 중기 추세 지지가 약해지는 신호가 나타났습니다.';
+  if (key === 'rsi' && normalized === 'BULLISH') return '최근 상승폭 평균이 하락폭 평균보다 우세해지며 단기 모멘텀이 회복되는 흐름을 보여줍니다.';
+  if (key === 'rsi' && normalized === 'BEARISH') return '상승 탄력이 둔화되고 하락폭의 비중이 커지며 단기 모멘텀이 식어가는 구간입니다.';
+  if (key === 'volume' && normalized === 'BREAKOUT_CONFIRMED') return '최근 고점을 넘어서는 가격 움직임에 평소(20일 평균)보다 많은 거래량이 동반되어 돌파 신뢰도를 뒷받침합니다.';
+  if (key === 'volume' && normalized === 'SQUEEZE_RELEASE_WEAK_VOLUME') return '가격과 밴드는 위쪽으로 열렸지만 거래량이 최근 평균에 미치지 못해 후속 거래량 유입을 확인할 필요가 있습니다.';
+  if (key === 'volume' && normalized === 'NEUTRAL') return '거래량이 최근 평균 수준에서 크게 벗어나지 않아 거래 참여 강도는 중립 상태입니다.';
+  if ((key === 'maSupport' || key === 'rsi') && normalized === 'NEUTRAL') return '긍정·주의 조건이 서로 상쇄되었거나 뚜렷한 방향성이 나타나지 않아 다음 일봉의 방향 전환을 관찰하는 구간입니다.';
   return publicStateNarrative(key, state);
 }
 

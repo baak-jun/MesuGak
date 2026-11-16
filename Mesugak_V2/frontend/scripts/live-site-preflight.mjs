@@ -205,7 +205,6 @@ const legalDatesAreUpdates = legalRoutes.every((route) => {
 const currentEditorialCopy = methodologyHtml.includes('2026-10-01')
   && methodologyHtml.includes('결측 처리')
   && /콘텐츠 안내 수정일\s+20\d{2}-\d{2}-\d{2}/.test(casesHtml)
-  && casesHtml.includes('여기 나온 숫자와 그림은 수업을 위해 만든 예시예요.')
   && (casesHtml.match(/class="case-study-visual"/g) || []).length === 8
   && (casesHtml.match(/class="case-study-caution"/g) || []).length === 8;
 const unsupportedClaimsAbsent = !routes

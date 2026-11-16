@@ -66,11 +66,11 @@ test('public learning and policy routes contain server-rendered content', () => 
   assert.match(methodologyHtml, /editorial-history-title/, 'methodology must expose a real editorial change record');
   assert.match(methodologyHtml, /콘텐츠 변경 기록/, 'methodology must explain why the change record exists');
   assert.match(labHtml, /조건을 조합해 보기/, 'condition lab must have an educational introduction');
-  assert.match(labHtml, /가상의 지표 상태/, 'condition lab must identify its invented inputs');
+  assert.match(labHtml, /차트에서 자주 만나는 지표 조건/, 'condition lab must explain its purpose');
   assert.match(labHtml, /band-calculator/, 'calculation lab is present before JavaScript loads');
   assert.match(labHtml, /106\.3246/, 'default calculation is prerendered');
   assert.match(labHtml, /0÷0/, 'zero-width interpretation is readable without interaction');
-  assert.match(labHtml, /특정 종목의 매수·매도·보유 판단/, 'condition lab must state that it is not a live recommendation tool');
+  assert.match(labHtml, /조합해서 읽는 포인트/, 'condition lab must synthesize the selected conditions');
   const privacyHtml = readFileSync(fileFor('/privacy'), 'utf8');
   assert.match(privacyHtml, /legal-runtime-status/, 'privacy page must expose the current feature state');
   assert.match(privacyHtml, /AdSense 요청은 현재 비활성화되어 광고 요청을 보내지 않습니다|AdSense 요청 게이트가 켜져 있습니다/, 'privacy page must state whether ad requests are enabled');

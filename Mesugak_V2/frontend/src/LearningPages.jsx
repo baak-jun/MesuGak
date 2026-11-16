@@ -146,17 +146,17 @@ function GuidePage({ page }) {
         <LearningHero eyebrow={`지표 학습 · ${page.label}`} title={page.label} summary={page.summary}>
           <div className="learning-hero-actions"><a className="primary-learning-button" href="/analysis">종목 분석 결과 보기 <ArrowRight size={16} /></a><a className="back-learning-link" href="/learn">← 모든 지표 보기</a><a className="back-learning-link" href={`/learn/articles/${page.slug}`}>계산과 배경 깊이 읽기 →</a></div>
         </LearningHero>
-        {page.slug === 'valuation' && <section className="guide-article-note" role="note"><ShieldCheck size={19} /><p>{'\uC774 \uD398\uC774\uC9C0\uC758 PER\u00B7PBR\uC740 \uC77D\uB294 \uBC95\uB9CC \uC548\uB0B4\uD558\uBA70, \uC885\uD569\uC810\uC218\uC5D0\uB294 \uBC18\uC601\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'}</p></section>}
+        {page.slug === 'valuation' && <section className="guide-article-note" role="note"><ShieldCheck size={19} /><p>PER·PBR·ROE는 차트 지표와 성격이 다른 재무 지표이므로 기술적 종합점수에 반영하지 않고, 기업의 기초 체력을 점검하는 별도 참고값으로 다룹니다.</p></section>}
         <div className="guide-article-layout">
           <article className="guide-article">
             {sections.map((section) => <section key={section.title} className="guide-article-section"><h2>{section.title}</h2>{section.body.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</section>)}
             {workedExample && <section className="guide-worked-example" aria-labelledby={page.slug + '-worked-title'}>
-              <div className="section-heading"><span>가상 숫자로 직접 확인하기</span><h2 id={page.slug + '-worked-title'}>{workedExample.title}</h2><p>{workedExample.setup}</p></div>
+              <div className="section-heading"><span>숫자로 직접 확인하기</span><h2 id={page.slug + '-worked-title'}>{workedExample.title}</h2><p>{workedExample.setup}</p></div>
               <ol className="guide-worked-steps">{workedExample.steps.map((step) => <li key={step.label}><strong>{step.label}</strong><code>{step.calculation}</code><p>{step.meaning}</p></li>)}</ol>
               <p className="guide-worked-reading"><strong>이렇게 읽어 볼 수 있어요</strong>{workedExample.reading}</p>
                <p className="guide-worked-caveat"><strong>한 번 더 볼 점</strong>{workedExample.caveat}</p>
             </section>}
-            {guide?.points?.length ? <section className="guide-visual-section"><div className="section-heading"><span>그림으로 확인하기</span><h2>그림으로 보는 {page.label}</h2><p>선이 어디서 만나고 갈라지는지 그림으로 살펴볼게요. 이해를 돕기 위해 만든 도식입니다.</p></div><div className="guide-visual-grid">{guide.points.map((point) => <article key={point.label} className="guide-visual-card"><div className="guide-visual-art">{point.graphic}</div><h3>{point.label}</h3><p>{point.desc}</p></article>)}</div></section> : null}
+            {guide?.points?.length ? <section className="guide-visual-section"><div className="section-heading"><span>그림으로 확인하기</span><h2>그림으로 보는 {page.label}</h2><p>선이 어디서 만나고 갈라지는지 핵심 패턴을 그림으로 비교해 보세요.</p></div><div className="guide-visual-grid">{guide.points.map((point) => <article key={point.label} className="guide-visual-card"><div className="guide-visual-art">{point.graphic}</div><h3>{point.label}</h3><p>{point.desc}</p></article>)}</div></section> : null}
             {learningCheck && <section className="learning-check-section" aria-labelledby={page.slug + '-check-title'}>
               <div className="section-heading"><span>이해 점검</span><h2 id={page.slug + '-check-title'}>이럴 땐 어떻게 읽을까요?</h2><p>조건 하나를 바꿔 보면 앞에서 배운 해석도 달라질까요?</p></div>
               <div className="learning-check-card">
@@ -166,11 +166,9 @@ function GuidePage({ page }) {
                 <p className="learning-counterexample"><strong>다른 장면에서는?</strong>{learningCheck.counterexample}</p>
               </div>
             </section>}
-            <section className="guide-article-note"><ShieldCheck size={19} /><p>수업 속 숫자는 이해를 돕기 위해 만든 값이에요. 실제 종목이나 과거 수익률을 보여 주지는 않습니다. 같은 신호도 시장 상황과 데이터 상태에 따라 다르게 읽힐 수 있어요.</p></section>
             <div className="source-box guide-source-box">
               <strong>계산 기준과 참고 자료</strong>
-              <p>이 수업의 용어와 해석 순서는 서비스의 분석 방법론을 기준으로 정리했습니다. 공개 분석은 금융위원회 공공데이터포털의 최근 거래일 확정 일봉을 사용하며, 수업 페이지에서는 원시 가격·지표 수치·API 응답을 재배포하지 않습니다.</p>
-              <p>아래 외부 참고 자료는 지표의 일반 정의와 계산을 더 읽기 위한 링크입니다. 실제 V2 계산 설정은 이 사이트의 방법론 설명과 가상 예시를 따르며, 다른 서비스의 숫자와는 입력 기간·표준편차 정의·당일 포함 여부가 다를 수 있습니다.</p>
+              <p>MesuGak은 금융위원회 공공데이터포털의 최근 거래일 확정 일봉을 기준으로 이 지표를 계산합니다. 차트 서비스마다 계산 기간, 표준편차 방식(표본·모집단), 평활법이나 당일 포함 여부가 다를 수 있으므로 아래 방법론과 원전 자료에서 정확한 산식을 함께 확인해 보세요.</p>
               <div className="source-box-links">
                 <a href="/methodology">분석 방법론 읽기 <ArrowRight size={14} /></a>
                 {learningReferences[page.slug] && <a href={learningReferences[page.slug].href} target="_blank" rel="noopener noreferrer">{learningReferences[page.slug].label} <ExternalLink size={14} /></a>}
@@ -229,7 +227,7 @@ function IndicatorArticlePage({ article }) {
         <div className="longread-layout">
           <article className="longread-article">
             <p className="longread-lead">{article.lead}</p>
-            {guide?.points?.[0] && <figure className="longread-figure"><div className="longread-figure-art">{guide.points[0].graphic}</div><figcaption>{guide.points[0].label} · 이해를 돕기 위해 만든 도식</figcaption></figure>}
+            {guide?.points?.[0] && <figure className="longread-figure"><div className="longread-figure-art">{guide.points[0].graphic}</div><figcaption>{guide.points[0].label} · 핵심 구조 도식</figcaption></figure>}
             {article.sections.map((section, sectionIndex) => (
               <Fragment key={section.title}>
               <section className="longread-section" id={`section-${sectionIndex + 1}`}>
@@ -249,7 +247,7 @@ function IndicatorArticlePage({ article }) {
               {(sectionIndex === 2 || sectionIndex === 6) && <AdSenseSlot placement="learning" title="광고" className="learning-inline-ad" />}
               </Fragment>
             ))}
-            <section className="longread-sources" aria-label="참고 자료"><h2>더 확인할 자료</h2><p>역사·일반 정의는 아래 원전과 기관 설명을 확인했습니다. MesuGak의 실제 설정은 V2 지표 계산 코드와 <a href="/methodology">분석 방법론</a>을 기준으로 서술했습니다.</p><ul>{article.sources.map((source) => <li key={source.href}><a href={source.href} target="_blank" rel="noopener noreferrer">{source.label} <ExternalLink size={14} /></a></li>)}</ul><p>수정일 {article.updatedOn} · 설명 속 계산 예시는 가상 값입니다. 오류 제보: <a href="mailto:or_not_official@naver.com">or_not_official@naver.com</a></p></section>
+            <section className="longread-sources" aria-label="참고 자료"><h2>더 확인할 자료</h2><p>역사·일반 정의는 아래 원전과 기관 설명을 확인했습니다. MesuGak의 실제 설정은 V2 지표 계산 코드와 <a href="/methodology">분석 방법론</a>을 기준으로 서술했습니다.</p><ul>{article.sources.map((source) => <li key={source.href}><a href={source.href} target="_blank" rel="noopener noreferrer">{source.label} <ExternalLink size={14} /></a></li>)}</ul><p>문서 수정일 {article.updatedOn} · 내용 문의 및 오류 제보: <a href="mailto:or_not_official@naver.com">or_not_official@naver.com</a></p></section>
             {article.slug === 'bollinger' && <div className="guide-article-note"><p>숫자를 직접 바꿔 보고 싶다면 <a href="/learn/lab#band-calculator">밴드 계산 실습</a>에서 상승·하락 순서와 표준편차 방식을 비교해 보세요.</p></div>}
             <nav className="longread-end-links" aria-label="이어 읽기"><a href={`/learn/${article.slug}`}>짧은 수업과 그림 보기 <ArrowRight size={16} /></a><a href={`/learn/articles/${next.slug}`}>다음 글 · {next.title} <ArrowRight size={16} /></a></nav>
           </article>
@@ -318,6 +316,32 @@ function CaseStudiesPage() {
   );
 }
 
+function summarizeLabSelection(selectedKeys) {
+  const hasPositive = selectedKeys.includes('cloudAbove') || selectedKeys.includes('rsiRecover');
+  const hasCaution = selectedKeys.includes('volumeWeak') || selectedKeys.includes('maFalling');
+  const hasBandExpand = selectedKeys.includes('bandExpand');
+
+  if (selectedKeys.length === 1) {
+    if (hasBandExpand) {
+      return '밴드 폭 확대는 변동성이 커졌다는 신호일 뿐 방향을 뜻하지 않습니다. 구름대 위치나 RSI, 거래량 조건을 함께 선택해 어느 쪽으로 변동성이 열리는지 비교해 보세요.';
+    }
+    return '단일 조건만 선택했습니다. 하나의 지표만으로는 돌파나 추세의 지속성을 판단하기 어려우므로, 거래량이나 중기 이동평균선 조건을 함께 선택해 신호가 일치하는지 대조해 보세요.';
+  }
+  if (hasPositive && hasCaution) {
+    return '긍정적인 위치·모멘텀 신호와 거래량 부족·중기 추세 약세 조건이 함께 선택되었습니다. 단기 반등이나 돌파가 나타나더라도 거래 참여가 약하거나 60일선이 하락 중이면 되밀릴 수 있으므로, 다음 확정 일봉에서 거래량 회복과 지지 유지 여부를 먼저 확인해 보세요.';
+  }
+  if (hasPositive && hasBandExpand) {
+    return '우호적인 가격·모멘텀 조건에 변동성 확대(밴드 폭 확장)가 더해진 조합입니다. 밴드 폭 자체는 방향을 말해주지 않으므로, 종가가 중심선과 구름대 위를 유지하며 상단 밴드 쪽으로 뻗어 가는지와 거래량이 동반되는지를 함께 점검해 보세요.';
+  }
+  if (hasCaution && hasBandExpand) {
+    return '변동성이 커지는 구간(밴드 폭 확장)에서 거래량이 약하거나 중기 추세가 하락 중인 조합입니다. 밴드가 아래쪽으로 열리며 하락 변동성이 확대되는 장면일 수 있으므로 하단 밴드 이탈 여부와 지지선 반응을 주의 깊게 살펴야 합니다.';
+  }
+  if (hasPositive) {
+    return '가격 위치(구름대 위)와 단기 모멘텀 회복(RSI)이 같은 방향을 가리키는 조합입니다. 두 신호가 맞물릴 때는 돌파 과정에서 상대 거래량이 평균 이상으로 붙는지, 60일 이동평균선의 기울기도 돌아서는지 추가로 확인하면 추세의 신뢰도를 높일 수 있습니다.';
+  }
+  return '거래 참여가 약하고 중기 이동평균선도 하락 방향인 조합입니다. 단기 반등이 나타나더라도 추세 전환으로 이어지기엔 힘이 부족할 수 있으므로, 거래량이 최근 평균을 회복하고 평균선 기울기가 완만해지는지 먼저 관찰해 보세요.';
+}
+
 function ConditionLabPage() {
   const [selectedKeys, setSelectedKeys] = useState(['cloudAbove', 'rsiRecover']);
   const selected = useMemo(() => labConditions.filter((condition) => selectedKeys.includes(condition.key)), [selectedKeys]);
@@ -340,14 +364,14 @@ function ConditionLabPage() {
             <li><strong>상황 보기</strong><p>종가는 구름대 위에 있고, RSI는 전일 28에서 오늘 34로 회복했으며 신호선 31보다 높다고 가정합니다. 볼린저 밴드 폭은 넓어지고 당일 거래량은 최근 평균의 0.8배입니다.</p></li>
             <li><strong>좋아 보이는 점</strong><p>가격이 구름대 위에 있고 RSI도 회복했어요. 가격 위치와 최근 하락 압력이 조금 나아졌다는 단서로 읽을 수 있습니다.</p></li>
             <li><strong>걸리는 점</strong><p>밴드가 넓어진 것만으로는 상승인지 하락인지 알 수 없어요. 거래량도 최근 평균의 0.8배라 돌파에 참여가 늘었다고 보기는 어렵습니다.</p></li>
-            <li><strong>다음 날 볼 것</strong><p>다음 확정 일봉에서 종가가 어디로 움직였는지, 밴드 안팎의 위치와 거래량이 어떻게 달라졌는지 살펴보세요. 이 숫자는 연습용이며 점수나 매매 판단을 계산하지 않습니다.</p></li>
+            <li><strong>다음 날 볼 것</strong><p>다음 확정 일봉에서 종가가 구름대 위를 유지하는지, 밴드 중심선 위에서 거래량이 평균 수준으로 올라오는지 함께 확인하면 반등의 지속성을 판단하기 좋습니다.</p></li>
           </ol>
         </section>
         <section className="lab-layout" aria-labelledby="lab-title">
           <div className="lab-panel">
-            <div className="section-heading"><span>01 · 조건 선택</span><h2 id="lab-title">어떤 신호가 보이나요?</h2><p>조건을 하나 이상 선택해 보세요. 이 도구는 점수나 추천을 계산하지 않습니다.</p></div>
+            <div className="section-heading"><span>01 · 조건 선택</span><h2 id="lab-title">어떤 신호가 보이나요?</h2><p>조건을 하나 이상 선택해 보세요. 함께 나타난 신호들의 의미와 추가로 확인할 점을 나란히 비교할 수 있습니다.</p></div>
             <div className="lab-condition-grid">
-              {labConditions.map((condition) => <label className={`lab-condition ${selectedKeys.includes(condition.key) ? 'selected' : ''}`} key={condition.key}><input type="checkbox" checked={selectedKeys.includes(condition.key)} onChange={() => toggleCondition(condition.key)} /><span><strong>{condition.label}</strong><small>가능한 해석과 한계를 함께 확인</small></span></label>)}
+              {labConditions.map((condition) => <label className={`lab-condition ${selectedKeys.includes(condition.key) ? 'selected' : ''}`} key={condition.key}><input type="checkbox" checked={selectedKeys.includes(condition.key)} onChange={() => toggleCondition(condition.key)} /><span><strong>{condition.label}</strong><small>{condition.hint}</small></span></label>)}
             </div>
           </div>
           <div className="lab-result" aria-live="polite">
@@ -356,11 +380,10 @@ function ConditionLabPage() {
             {selected.length ? <>
               <div className="lab-result-block lab-result-support"><strong>먼저 알 수 있는 것</strong>{selected.map((condition) => <p key={condition.key}><span className="lab-result-item-label">{condition.label}: </span>{condition.support}</p>)}</div>
               <div className="lab-result-block lab-result-caution"><strong>더 확인할 점</strong>{selected.map((condition) => <p key={condition.key}><span className="lab-result-item-label">{condition.label}: </span>{condition.caution}</p>)}</div>
-              <div className="lab-result-note"><strong>정리하면</strong><p>여러 조건을 골라도 이 도구는 점수나 추천을 만들지 않습니다. 방향이 정해지지 않은 조건은 따로 구분하고, 기준일과 다음 확정 일봉을 확인해 해석의 강도를 조절해 보세요.</p></div>
-            </> : <p className="lab-empty">선택한 조건을 바탕으로 설명이 여기에 표시됩니다.</p>}
+              <div className="lab-result-note"><strong>조합해서 읽는 포인트</strong><p>{summarizeLabSelection(selectedKeys)}</p></div>
+            </> : <p className="lab-empty">왼쪽에서 조건을 하나 이상 선택하면 각 조건의 의미와 조합 해석이 여기에 표시됩니다.</p>}
           </div>
         </section>
-        <section className="guide-article-note lab-disclaimer"><ShieldCheck size={19} /><p>이 실험실은 기술지표의 해석 방법을 연습하기 위한 교육용 도구입니다. 특정 종목의 매수·매도·보유 판단이나 미래 수익률을 계산하지 않습니다.</p></section>
       </div>
       <LearningFooter />
       <ComplianceDock />
@@ -402,14 +425,10 @@ function GlossaryPage() {
         </section>
         <section className="glossary-faq" aria-labelledby="glossary-faq-title">
           <div className="section-heading"><span>02 · 자주 생기는 오해</span><h2 id="glossary-faq-title">뜻만 알면 충분할까요?</h2></div>
-          <details open><summary>종합점수가 높으면 상승 확률도 높다는 뜻인가요?</summary><p>아닙니다. 종합점수는 미리 정한 조건이 함께 나타났는지를 정렬한 내부 요약값입니다. 미래 수익률이나 성공 확률을 계산한 값이 아니며, 비슷한 지표가 같은 흐름을 반복해서 보여줄 수도 있습니다.</p></details>
-          <details><summary>기준일이 최근이면 분석을 바로 믿어도 되나요?</summary><p>기준일은 데이터가 언제까지 확정되었는지를 알려주는 정보일 뿐입니다. 지표의 한계, 데이터 누락, 지표 간 충돌을 함께 확인해야 하며 기준일이 최신이어도 해석이 맞는다고 보장하지 않습니다.</p></details>
-          <details><summary>PBR이나 RSI의 경계값은 법정 기준인가요?</summary><p>아닙니다. 경계값은 학습을 위해 자주 쓰이는 참고 구간일 뿐이고 업종·시장 국면·계산 기간에 따라 의미가 달라집니다. 이 사이트의 참고 범위는 매수·매도 기준이 아닙니다.</p></details>
-          <details><summary>원시 가격을 보지 않고도 지표를 배울 수 있나요?</summary><p>이 사이트는 공개 데이터 이용 범위에 맞춰 원시 시세 대신 가상 도식과 문장형 상태를 사용합니다. 실제 적용을 연습할 때는 해당 데이터의 이용 조건과 기준일을 확인해야 하며, 공개 문장만으로 원시값을 역산하려고 하지 않습니다.</p></details>
-        </section>
-        <section className="guide-article-note glossary-disclaimer" role="note">
-          <ShieldCheck size={19} />
-          <p>이 용어집은 기술지표를 읽는 방법을 설명하는 교육 자료입니다. 특정 종목의 취득·처분이나 수익을 권유하지 않으며, 용어 하나만으로 투자 판단을 확정하지 않습니다.</p>
+          <details open><summary>종합점수가 높으면 상승 확률도 높다는 뜻인가요?</summary><p>종합점수는 다섯 가지 기술적 조건이 얼마나 동시에 충족되었는지를 0~100으로 요약한 정렬 지표입니다. 상승 확률을 뜻하지 않으며, 추세 지표들이 같은 가격 움직임을 중복 반영해 점수가 높아진 것인지 세부 근거를 함께 확인해야 합니다.</p></details>
+          <details><summary>기준일이 최근이면 분석 결과를 그대로 적용해도 되나요?</summary><p>기준일은 장 마감 후 확정된 일봉 데이터의 날짜입니다. 장중 실시간 변동이나 공시·이벤트는 반영되지 않으므로, 기준일 확인과 더불어 지표 간 충돌 여부를 함께 살펴야 합니다.</p></details>
+          <details><summary>RSI 70·30이나 PBR 1배 같은 숫자는 절대적인 기준인가요?</summary><p>관찰을 시작하기 위해 널리 쓰이는 참고 구간일 뿐입니다. 강한 추세에서는 RSI가 70 이상이나 30 이하에 오래 머물 수 있고, 업종과 자본 구조에 따라 적정 PBR 수준도 크게 달라지므로 추세와 업종 맥락을 함께 봐야 합니다.</p></details>
+          <details><summary>여러 지표에서 동시에 긍정 신호가 나오면 근거가 그만큼 늘어난 건가요?</summary><p>반드시 그렇지는 않습니다. 예를 들어 주가가 구름대 위, 60일 이동평균선 위, 볼린저 중심선 위에 있다는 세 조건은 모두 최근 가격이 평균보다 높다는 하나의 현상을 다른 기간으로 표현한 것일 수 있습니다. 따라서 거래량이나 RSI처럼 성격이 다른 지표가 함께 뒷받침하는지 확인하는 것이 중요합니다.</p></details>
         </section>
       </div>
       <LearningFooter />
@@ -425,19 +444,18 @@ function MethodologyPage() {
       <div className="learning-container">
         <LearningHero eyebrow={pageCopy.methodology.eyebrow} title={pageCopy.methodology.title} summary={pageCopy.methodology.summary}><a className="back-learning-link" href="/learn">← 학습 홈으로</a></LearningHero>
         <section className="editorial-note" aria-labelledby="publication-status-title">
-          <h2 id="publication-status-title">먼저 짚고 갈 것</h2>
-          <p>여기 적은 산식은 현재 V2 코드 기준입니다. 수업 속 숫자와 그림은 조건을 읽는 연습을 위해 만들었어요. 실제 종목 결과를 옮긴 것은 아닙니다.</p>
-          <p>이 설명은 {CONTENT_UPDATED_ON}에 수정했습니다. 공개 분석 화면의 데이터 기준일은 별개예요. 화면에 나온 날짜가 최신 거래일인지 확인해 주세요.</p>
-          <p>계산·출처·문장에 오류가 있으면 <a href="mailto:or_not_official@naver.com">or_not_official@naver.com</a>으로 알려 주세요. 확인된 오류는 수정 사유와 함께 기록합니다.</p>
+          <h2 id="publication-status-title">산식 기준과 안내</h2>
+          <p>이 페이지의 산식과 가중치는 현재 운영 중인 MesuGak V2 분석 엔진(`indicators.py`, `scoring.py`, `risk.py`) 코드 기준입니다.</p>
+          <p>문서 최근 수정일은 {CONTENT_UPDATED_ON}이며, 계산식·출처·설명에 오류가 있으면 <a href="mailto:or_not_official@naver.com">or_not_official@naver.com</a>으로 알려 주세요.</p>
         </section>
         <section className="editorial-note editorial-history" aria-labelledby="editorial-history-title">
           <h2 id="editorial-history-title">콘텐츠 변경 기록</h2>
-          <p>학습 내용이나 공개 범위를 언제, 왜 고쳤는지 남겨 두었습니다.</p>
+          <p>산식 설명이나 학습 콘텐츠가 추가·수정된 내역입니다.</p>
           <ol>
             {editorialChangelog.map((entry) => <li key={`${entry.date}-${entry.title}`}><strong>{entry.date} · {entry.title}</strong><span>{entry.body}</span></li>)}
           </ol>
         </section>
-         <article className="methodology-article">{[...methodologySections, ...methodologySupplementSections].map((section) => <section key={section.title} className="guide-article-section"><h2>{section.title}</h2>{section.body.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</section>)}<div className="source-box"><strong>데이터 출처</strong><p>금융위원회 공공데이터포털의 주식시세정보·지수시세정보를 사용합니다. 화면에는 원시 시세와 원시 API 응답을 공개하지 않습니다.</p><a href="https://www.data.go.kr/data/15094808/openapi.do" target="_blank" rel="noreferrer">주식시세정보 원문 보기 <ExternalLink size={14} /></a></div></article>
+         <article className="methodology-article">{[...methodologySections, ...methodologySupplementSections].map((section) => <section key={section.title} className="guide-article-section"><h2>{section.title}</h2>{section.body.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</section>)}<div className="source-box"><strong>데이터 출처</strong><p>금융위원회 공공데이터포털의 주식시세정보·지수시세정보 API를 통해 확정 일봉 데이터를 수집합니다.</p><a href="https://www.data.go.kr/data/15094808/openapi.do" target="_blank" rel="noreferrer">주식시세정보 원문 보기 <ExternalLink size={14} /></a></div></article>
       </div>
       <LearningFooter />
       <ComplianceDock />
@@ -454,14 +472,14 @@ function AboutPage() {
         <div className="about-grid"><article className="about-card"><ShieldCheck size={21} /><h2>{pageCopy.about.cards[0].title}</h2><p>{pageCopy.about.cards[0].body}</p></article><article className="about-card"><BookOpen size={21} /><h2>{pageCopy.about.cards[1].title}</h2><p>{pageCopy.about.cards[1].body}</p></article><article className="about-card"><Mail size={21} /><h2>{pageCopy.about.cards[2].title}</h2><p>{pageCopy.about.cards[2].body}</p><a className="contact-link" href="mailto:or_not_official@naver.com">or_not_official@naver.com</a></article></div>
         <section className="editorial-note" aria-labelledby="analysis-method-origin">
           <h2 id="analysis-method-origin">분석 기준</h2>
-          <p>공개 분석에는 제가 실제 분석에 쓰는 기술지표 기준을 코드로 옮겼습니다. 볼린저 밴드·이동평균·일목균형표·RSI·거래량을 함께 보고, 계산할 수 없는 지표가 있으면 그 항목을 빼고 남은 비중을 다시 나눕니다. 자세한 산식과 한계는 <a href="/methodology">점수 계산 방법</a>에 적었습니다.</p>
+          <p>공개 분석에는 실제 차트 분석에 사용하는 다중 기술지표 규칙을 코드로 구현해 적용했습니다. 볼린저 밴드·이동평균·일목균형표·RSI·거래량을 함께 평가하며, 기간 부족 등으로 계산할 수 없는 지표가 있으면 해당 가중치를 제외하고 남은 비중을 재정규화합니다. 자세한 산식은 <a href="/methodology">점수 계산 방법</a>에서 확인할 수 있습니다.</p>
         </section>
         <section className="editorial-note" aria-labelledby="publication-schedule-title">
           <h2 id="publication-schedule-title">갱신과 지연 처리</h2>
-          <p>공개 분석은 장이 끝난 뒤 확정된 일봉을 씁니다. 목록의 기준일은 계산에 쓴 마지막 거래일이에요. 이 날짜만으로 데이터 제공기관이나 서버가 지금 정상적으로 갱신 중인지는 알 수 없습니다.</p>
-          <p>새 거래일 자료가 나오기 전에는 이전 결과가 계속 보일 수 있어요. 현재 상황으로 읽기 전에 기준일을 살펴보고, 날짜가 오래되었거나 자료 부족 안내가 있다면 그 점을 감안해 주세요.</p>
+          <p>공개 분석은 장 마감 후 금융위원회 공공데이터포털에 새 거래일의 확정 일봉이 게시되면 이를 감지해 갱신합니다. 목록 상단에 표시되는 기준일이 실제 계산에 사용된 마지막 거래일입니다.</p>
+          <p>주말·휴장일이나 공공데이터 반영 전에는 직전 거래일 분석 결과가 유지되며, 평일 기준 3일 이상 경과한 경우 화면 상단에 기준일 경과 안내가 함께 표시됩니다.</p>
         </section>
-        <section className="editorial-note"><h2>콘텐츠 운영 기록</h2><p>지표 수업은 조건의 뜻, 계산 예시, 해석이 약해지는 반대 근거, 다음에 확인할 질문을 중심으로 구성합니다. 수치 예시는 가상이며 성과 검증이나 추천 근거로 사용하지 않습니다.</p><p>이 안내의 최근 수정일은 {CONTENT_UPDATED_ON}입니다. 계산·출처·문장 오류가 있으면 <a href="mailto:or_not_official@naver.com">or_not_official@naver.com</a>으로 알려 주세요. 확인 후 수정한 내용과 사유를 편집 기록에 남깁니다.</p></section>
+        <section className="editorial-note"><h2>콘텐츠 운영과 정정 안내</h2><p>지표 수업과 사례 수업은 각 조건의 정의, 수식 계산 과정, 그리고 신호가 엇갈리는 반례를 중심으로 구성합니다. 최근 콘텐츠 수정일은 {CONTENT_UPDATED_ON}이며, 오류 제보나 문의는 <a href="mailto:or_not_official@naver.com">or_not_official@naver.com</a>으로 보내 주세요.</p></section>
          {import.meta.env.VITE_SUPPORT_URL && <section className="support-note"><h2>커피로 응원하기</h2><p>후원은 서비스 운영을 위한 자율적인 응원이며, 후원 여부에 따라 추가 분석·개인별 추천·우선 답변을 제공하지 않습니다.</p><a href={import.meta.env.VITE_SUPPORT_URL} target="_blank" rel="noopener noreferrer">커피 후원 링크 <ExternalLink size={14} /></a></section>}
       </div>
       <LearningFooter />

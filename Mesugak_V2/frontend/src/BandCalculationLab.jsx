@@ -15,8 +15,8 @@ export default function BandCalculationLab() {
   return (
     <section className="band-lab learning-section" id="band-calculator" aria-labelledby="band-lab-title">
       <div className="section-heading"><span>숫자를 바꾸는 계산 실습</span><h2 id="band-lab-title">같은 밴드 폭인데 방향이 다를 수 있을까요?</h2>
-        <p>가상 종가를 직접 바꾸며 평균·표준편차·밴드 위치가 어떻게 달라지는지 확인해 보세요. 입력한 값은 이 브라우저에서만 계산하며 저장하거나 서버로 전송하지 않습니다.</p></div>
-      <p>기본 예시는 손으로 확인하기 쉬운 5개 값입니다. 입력한 모든 값을 하나의 창으로 계산하고 마지막 값을 오늘 종가로 봅니다. 실제 MesuGak 분석은 오늘을 포함한 20봉·표본 표준편차·2배 경계를 사용합니다. 아래 그림은 마지막 창의 경계이며 과거 시점별 이동 밴드가 아닙니다.</p>
+        <p>종가 5개를 직접 바꾸며 평균·표준편차·밴드 폭·%b가 어떻게 달라지는지 바로 계산해 보세요.</p></div>
+      <p>손으로 검산하기 쉽도록 기본 예시는 5개 종가를 하나의 창으로 묶어 계산하며, 마지막 숫자를 오늘 종가로 봅니다(실제 MesuGak 종목 분석은 오늘을 포함한 20봉·표본 표준편차·2배 경계 기준).</p>
       <div className="band-presets" role="group" aria-label="가상 종가 예시">
         {examples.map((example) => <button type="button" key={example.label} onClick={() => setInput(example.values)}>{example.label}</button>)}
       </div>
@@ -48,7 +48,7 @@ export default function BandCalculationLab() {
         <h3>비교하고 설명해 보기</h3>
         <ol><li>표본 방식을 선택하고 ‘상승 순서’와 ‘하락 순서’를 번갈아 눌러 보세요. 평균과 폭이 바뀌나요?</li><li>같은 값을 모집단 방식으로 바꾸면 왜 경계가 좁아질까요?</li><li>‘가격이 같을 때’를 선택하면 %b를 0.5라고 할 수 있을까요?</li></ol>
         <details><summary>비교 해설 읽기</summary><p>96·98·100·102·104와 그 역순은 평균 100, 제곱 차이의 합 40으로 같습니다. 표본 표준편차는 √10 ≈ 3.1623, 경계는 93.6754와 106.3246, 폭은 약 12.6491%입니다. 마지막 종가가 달라 %b는 약 0.8162와 0.1838로 달라집니다. 폭만으로 가격 방향을 정할 수 없는 이유입니다.</p><p>모집단 방식은 40을 5로 나누어 표준편차가 √8 ≈ 2.8284가 됩니다. 같은 입력이라도 분모가 달라 경계가 좁아집니다. 모든 값이 100이면 표준편차와 폭이 0이므로 %b는 0÷0입니다. 중앙이라는 이유로 0.5를 부여하지 않습니다.</p></details>
-        <p>이 실습은 가격의 분산과 마지막 위치를 설명합니다. 미래 가격이나 매매 시점은 계산하지 않습니다. 기간을 줄인 예시의 2배 경계는 산술 비교용이며 거래 설정을 권하는 뜻이 아닙니다.</p>
+        <p>핵심 정리: 밴드 폭(Bandwidth)은 가격이 흩어진 정도만 보여주고, 현재 종가가 밴드 안에서 어느 쪽에 놓여 있는지는 %b가 보여줍니다. 따라서 밴드 폭과 %b를 함께 읽어야 변동성의 크기와 방향을 동시에 파악할 수 있습니다.</p>
         <p><a href="/learn/articles/bollinger">볼린저 밴드 계산 원리 읽기</a> · <a href="https://www.bollingerbands.com/bollinger-band-rules" target="_blank" rel="noopener noreferrer">John Bollinger의 해석 규칙</a> · <a href="/methodology">MesuGak 계산 기준</a></p>
       </div>
     </section>

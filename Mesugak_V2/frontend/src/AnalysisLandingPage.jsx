@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpen, ShieldCheck } from 'lucide-react';
+import { ArrowRight, BookOpen } from 'lucide-react';
 import { BRAND_FULL, BRAND_SHORT } from './brand';
 import { pageCopy } from './content/pageCopy.js';
 import './learning.css';
@@ -24,7 +24,6 @@ export function AnalysisLandingPage() {
           <section><h2>{analysis.order.title}</h2><ol>{analysis.order.steps.map((step) => <li key={step}>{step}</li>)}</ol></section>
           <section><h2>{analysis.conflict.title}</h2>{analysis.conflict.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</section>
           <section><h2>{analysis.score.title}</h2><p>{analysis.score.body} 가중치와 계산 예시는 <a href="/methodology">분석 방법론</a>에 적었습니다.</p><p>{analysis.score.dateReminder} 낯선 말은 <a href="/learn/glossary">기술지표 용어집</a>에서 확인할 수 있습니다.</p></section>
-          <section className="guide-article-note"><ShieldCheck size={19} /><p>{analysis.caution}</p></section>
         </article>
       </div>
       <footer className="learning-footer"><small>문의: or_not_official@naver.com</small><nav aria-label="정책 페이지"><a href="/privacy">개인정보처리방침</a><a href="/data">데이터 안내</a><a href="/disclaimer">면책 안내</a></nav></footer>

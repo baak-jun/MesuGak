@@ -401,10 +401,10 @@ function reasonLabel(value) {
 
 
 function publicConclusion(stock) {
-  if (stock.riskState === 'defensive') return '걸리는 조건이 여럿 보여요. 아래 항목에서 어떤 신호가 약한지 읽고, 다음 확정 일봉에서는 달라지는지도 살펴보세요.';
-  if (stock.confidence >= 70) return '여러 조건이 같은 쪽을 가리켜 점수가 높게 나왔어요. 앞으로도 같은 흐름이 이어진다는 뜻은 아니니, 기준일과 조건별 의미를 함께 보세요.';
-  if (stock.riskState === 'watch') return '좋아 보이는 점과 걸리는 점이 함께 있어요. 어느 쪽이 이어지는지 다음 확정 일봉에서 다시 살펴보세요.';
-  return '지금은 한쪽으로 읽기엔 근거가 엇갈려요. 기준일과 각 조건을 차례로 살펴보세요.';
+  if (stock.riskState === 'defensive') return '주의 신호가 여럿 포착되었습니다. 아래 항목에서 어느 지표가 약세를 가리키는지 확인하고, 지지선 회복 여부를 함께 살펴보세요.';
+  if (stock.confidence >= 70) return '다수의 기술지표가 긍정적인 방향으로 정렬되어 점수가 높게 산출되었습니다. 같은 가격 흐름을 중복 반영한 지표가 있는지, 거래량과 모멘텀도 뒷받침되는지 아래 근거에서 확인해 보세요.';
+  if (stock.riskState === 'watch') return '긍정 신호와 주의 신호가 함께 나타난 구간입니다. 추세 위치와 단기 모멘텀 중 어느 쪽이 우세한지 아래 세부 조건에서 비교해 보세요.';
+  return '뚜렷한 한쪽 방향성보다는 지표별 신호가 엇갈리는 중립 구간입니다. 기준일과 각 지표의 세부 조건을 차례로 확인해 보세요.';
 }
 function riskStateFromPayload(payload) {
   const state = String(payload.riskState || payload.status || '').toLowerCase();
@@ -1296,15 +1296,14 @@ function PublicAnalysisPanel({ stock, compact = false }) {
         <div className="public-section-heading"><span>01 · 종합 해석</span><h4>먼저 전체 흐름부터 볼까요?</h4></div>
         <div className="public-conclusion"><span>현재 분류</span><p>{publicConclusion(stock)}</p></div>
         <div className="public-reading-grid">
-          <article><span>점수가 말하는 것</span><strong>{formatNumber(stock.confidence, 1)}점 · {stock.label}</strong><p>여러 기술 조건을 정해진 가중치로 묶은 점수예요. 한 지표만 보고 결론을 내리지는 마세요.</p></article>
-          <article><span>뒷받침 조건</span><strong>{supportingReasons.length}개</strong><p>{supportingReasons.length ? '현재 분류를 뒷받침한 조건들이에요. 서로 비슷한 움직임을 반복해 보여 줄 수도 있으니 아래에서 하나씩 읽어 보세요.' : '지금 표시할 뒷받침 조건은 없어요. 점수와 기준일을 함께 확인해 주세요.'}</p></article>
-          <article><span>추가 확인 조건</span><strong>{cautionReasons.length}개</strong><p>{cautionReasons.length ? '현재 해석에 걸리는 조건들이에요. 수가 적어도 아래에서 함께 살펴보세요.' : '현재 분류된 주의 조건은 없어요. 그렇다고 앞으로의 흐름까지 확인된 것은 아닙니다.'}</p></article>
+          <article><span>점수가 말하는 것</span><strong>{formatNumber(stock.confidence, 1)}점 · {stock.label}</strong><p>다섯 가지 기술지표(볼린저·이평선·일목·RSI·거래량)의 조건을 가중 평균한 요약 점수입니다.</p></article>
+          <article><span>뒷받침 조건</span><strong>{supportingReasons.length}개</strong><p>{supportingReasons.length ? '현재 추세나 모멘텀을 긍정적으로 평가한 조건들입니다. 각 항목을 눌러 구체적인 판정 기준과 도식을 확인할 수 있습니다.' : '현재 포착된 긍정 조건이 없습니다. 기준일과 지표별 상태를 함께 확인해 보세요.'}</p></article>
+          <article><span>추가 확인 조건</span><strong>{cautionReasons.length}개</strong><p>{cautionReasons.length ? '추세 약화나 거래량 부족 등 해석할 때 유의해야 할 조건들입니다. 긍정 신호와 함께 대조해 보세요.' : '현재 포착된 주의 조건은 없습니다. 아래에서 지표별 세부 상태를 확인할 수 있습니다.'}</p></article>
         </div>
-        <p className="public-analysis-note">최근 거래일의 확정 일봉을 분석한 결과입니다. 가격·차트·지표 원수치는 공개하지 않고, 분석에 반영된 조건과 해설만 보여드립니다.</p>
       </section>
 
       <section id={sectionId('evidence')} className="public-analysis-section public-evidence-section">
-        <div className="public-section-heading"><span>02 · 반영한 조건</span><h4>각 신호는 같은 이야기를 할까요?</h4><p>조건이 같은 쪽을 가리킬 때도, 엇갈릴 때도 있어요. 아래에서 나눠 볼게요.</p></div>
+        <div className="public-section-heading"><span>02 · 반영한 조건</span><h4>각 신호는 같은 이야기를 할까요?</h4><p>각 태그를 누르면 해당 조건의 수식적 의미와 차트 도식을 확인할 수 있습니다.</p></div>
         <div className="public-evidence-columns">
           <article className="public-evidence-card supportive"><header><strong>해석을 뒷받침한 조건</strong><span>{supportingReasons.length}개</span></header><div>{supportingReasons.length ? supportingReasons.map((reason) => <span key={reason} onClick={() => setReasonKey(reason)} style={{cursor: 'pointer'}} title="클릭하여 설명 보기" className="clickable-reason">{publicReasonLabel(reason)} <HelpCircle size={11} style={{display:'inline', marginLeft:'2px', opacity:0.6}}/></span>) : <small>현재 공개된 뒷받침 조건이 없습니다.</small>}</div></article>
           <article className="public-evidence-card caution"><header><strong>함께 확인할 조건</strong><span>{cautionReasons.length}개</span></header><div>{cautionReasons.length ? cautionReasons.map((reason) => <span key={reason} onClick={() => setReasonKey(reason)} style={{cursor: 'pointer'}} title="클릭하여 설명 보기" className="clickable-reason">{publicReasonLabel(reason)} <HelpCircle size={11} style={{display:'inline', marginLeft:'2px', opacity:0.6}}/></span>) : <small>현재 뚜렷한 경고 조건이 없습니다.</small>}</div></article>
@@ -1313,7 +1312,7 @@ function PublicAnalysisPanel({ stock, compact = false }) {
       </section>
 
       <section id={sectionId('indicators')} className="public-analysis-section public-state-detail">
-        <div className="public-section-heading"><span>03 · 지표별 상태 해설</span><h4>지표별로 다시 살펴볼까요?</h4><p>분석 코드가 분류한 상태와 그 이유를 볼 수 있어요. 원시 입력값은 공개하지 않습니다.</p></div>
+        <div className="public-section-heading"><span>03 · 지표별 상태 해설</span><h4>지표별로 다시 살펴볼까요?</h4><p>다섯 가지 기술지표 각각의 현재 판정 상태와 세부 근거입니다.</p></div>
         {states.length ? states.map(([key, state]) => {
           const stateReasons = Array.from(new Map((state.reasons || []).filter(Boolean).map((reason) => [publicReasonLabel(reason), reason])).values()).slice(0, 6);
           return (
@@ -2089,8 +2088,6 @@ export default function ResearchApp() {
             <div className="auth-block"><span>{user ? (settingsStatus || (adminChecking ? '관리자 권한 확인 중...' : adminViewActive ? '관리자 분석 화면 · 상세 지표 확인 중' : isAdmin ? '관리자 권한 확인됨 · 공개 분석 화면 사용 중' : '로그인됨 · 공개 분석 화면 사용 중')) : '로그인 없이 공개 분석을 볼 수 있습니다.'}</span><div className="auth-buttons">{isAdmin && <button type="button" className="auth-button ghost" onClick={adminViewActive ? exitAdminAnalysis : enterAdminAnalysis}><span>{adminViewActive ? '공개 분석 보기' : '관리자 분석 보기'}</span></button>}<button type="button" className="auth-button" onClick={user ? () => signOut(auth) : loginWithGoogle}>{user ? <LogOut size={14} /> : <LogIn size={14} />}<span>{user ? '로그아웃' : '구글 로그인'}</span></button></div></div>
           </div>
         </header>
-        <section className="notice-panel"><Shield size={18} /><p>최근 거래일의 확정 일봉을 바탕으로 기술지표가 어떤 상태인지 설명하는 학습 서비스입니다. 화면의 점수와 해설은 기술지표를 공부하기 위한 참고자료이며, 특정 종목의 거래나 수익을 보장하지 않습니다.</p></section>
-        <section className="notice-panel data-rights-panel"><AlertTriangle size={18} /><p>{adminViewActive ? '관리자 화면에서는 금융위원회 공공데이터로 계산한 차트와 상세 지표를 확인할 수 있습니다.' : publicLiveDataApproved ? '금융위원회 공공데이터에서 제공하는 최근 거래일의 확정 일봉을 분석해 종목별 종합점수와 지표 해설을 보여드립니다. 현재가, 가격 차트와 지표 원수치는 공개하지 않습니다.' : '공개 분석을 준비하고 있습니다. 데이터 확인이 끝나면 종목별 점수와 지표 해설을 보여드립니다.'}</p></section>
         {workspaceView === 'console' && <>{adminViewActive ? selected ? <><div className="analysis-layout"><TechnicalChart stock={selected} loading={detailLoadingId === selected?.id} /><ScoreDock stock={selected} /></div><PublicAnalysisPanel stock={selected} compact={isCompactLayout} /></> : <PublicAnalysisUnavailable message="관리자 분석 목록을 아직 불러오지 못했습니다. 잠시 후 새로고침해 주세요." /> : selected ? <PublicAnalysisPanel stock={selected} compact={isCompactLayout} /> : <PublicAnalysisUnavailable message={publicLiveDataApproved ? loadError : '공개 분석 데이터를 준비하고 있습니다. 잠시 후 다시 확인해 주세요.'} />}{publicAnalysisAdReady && <AdSenseSlot title="분석 본문 광고" placement="analysis" />}</>}
         {workspaceView === 'executions' && adminViewActive && <div className="execution-page"><PortfolioSnapshot portfolio={portfolio} onRefresh={requestPaperAccountRefresh} refreshBusy={paperRefreshBusy} refreshMessage={paperAccountMessage} canRefresh={Boolean(adminViewActive && firebaseReady && db)} /><RuntimeMonitorPanel runtime={runtimeMonitor} /><PrivatePerformancePanel performance={privatePerformance} /><TradeLogPanel logs={tradeLogs} /><OrdersPanel orders={orders} /></div>}
 

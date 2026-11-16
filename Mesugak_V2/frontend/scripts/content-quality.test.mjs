@@ -117,7 +117,7 @@ test('analysis tool stays out of the authored sitemap and is marked noindex', ()
   assert.match(analysisHtml, /<meta name="robots" content="noindex,follow"/);
   assert.match(analysisHtml, /여기서 볼 수 있는 것/);
   assert.match(analysisHtml, /신호가 엇갈리는 예/);
-  assert.match(analysisHtml, /점수를 읽기 전에/);
+  assert.match(analysisHtml, /점수를 읽을 때 참고할 점/);
   assert.match(analysisHtml, /learn\/glossary/);
   assert.match(researchSource, /public-list-freshness/);
   assert.match(researchSource, /publicFreshnessNotice\(selected\.updatedAt\)/);
@@ -208,7 +208,7 @@ test('condition lab instructions match the supported selection count', () => {
 
   assert.match(lab, /조건을 하나 이상 선택해 보세요/);
   assert.doesNotMatch(lab, /조건을 두 개 이상 선택해 보세요/);
-  assert.match(lab, /점수나 추천을 계산하지 않습니다/);
+  assert.match(lab, /조합해서 읽는 포인트/);
   assert.match(lab, /밴드가 넓어진 것만으로는 상승인지 하락인지 알 수 없어요/);
   assert.match(lab, /거래량도 최근 평균의 0\.8배라 돌파에 참여가 늘었다고 보기는 어렵습니다/);
   assert.match(lab, /더 확인할 점/);
