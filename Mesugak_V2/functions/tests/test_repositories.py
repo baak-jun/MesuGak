@@ -1,4 +1,5 @@
 import unittest
+import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -8,6 +9,7 @@ if str(FUNCTIONS_DIR) not in sys.path:
     sys.path.insert(0, str(FUNCTIONS_DIR))
 
 from strategy_engine.repositories import FirestoreStrategyRepository
+from google.api_core.exceptions import DeadlineExceeded
 
 
 class PublicManifestRepositoryTests(unittest.TestCase):
@@ -43,6 +45,26 @@ class PublicManifestRepositoryTests(unittest.TestCase):
 
         self.assertEqual(batch.set.call_count, 2)
         batch.commit.assert_called_once()
+
+    def test_save_stock_analyses_batch_retries_transient_deadline(self) -> None:
+        db = MagicMock()
+        batch = db.batch.return_value
+        batch.commit.side_effect = [DeadlineExceeded("temporary timeout"), None]
+        repo = FirestoreStrategyRepository(db)
+
+        with patch.dict(
+            os.environ,
+            {
+                "MESUGAK_FIRESTORE_COMMIT_RETRIES": "1",
+                "MESUGAK_FIRESTORE_COMMIT_RETRY_SECONDS": "0",
+            },
+        ), patch("strategy_engine.repositories.time.sleep") as sleep, patch.object(
+            repo, "_server_timestamp", return_value="now"
+        ):
+            repo.save_stock_analyses_batch([("KR_005930", {"code": "005930"})])
+
+        self.assertEqual(batch.commit.call_count, 2)
+        sleep.assert_not_called()
 
     def test_save_meta_chunks_batch(self) -> None:
         db = MagicMock()

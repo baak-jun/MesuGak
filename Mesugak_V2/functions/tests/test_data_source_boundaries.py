@@ -15,7 +15,11 @@ KIS_PAPER_RUNTIME = frozenset(
     {
         FUNCTIONS_DIR / "jobs" / "school_paper_trader.py",
         FUNCTIONS_DIR / "jobs" / "manual_kis_order.py",
+        FUNCTIONS_DIR / "jobs" / "kis_realtime_trader.py",
+        FUNCTIONS_DIR / "jobs" / "contest_market_scan.py",
+        FUNCTIONS_DIR / "jobs" / "contest_daily_report.py",
         FUNCTIONS_DIR / "strategy_engine" / "kis_paper.py",
+        FUNCTIONS_DIR / "strategy_engine" / "kis_realtime.py",
     }
 )
 BANNED_PROVIDERS = ("financedatareader", "yfinance", "pykrx", "pandas_datareader", "investpy")

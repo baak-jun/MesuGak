@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 try:
     from dotenv import load_dotenv
 except ModuleNotFoundError:
-    def load_dotenv(path: str | None = None) -> bool:
+    def load_dotenv(path: str | None = None, *, override: bool = False) -> bool:
         """Small fallback for servers that have not installed python-dotenv yet."""
         env_path = Path(path or ".env")
         if not env_path.exists():
@@ -23,7 +23,11 @@ except ModuleNotFoundError:
             if not line or line.startswith("#") or "=" not in line:
                 continue
             key, value = line.split("=", 1)
-            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+            name, parsed = key.strip(), value.strip().strip('"').strip("'")
+            if override:
+                os.environ[name] = parsed
+            else:
+                os.environ.setdefault(name, parsed)
         return True
 
 FUNCTIONS_DIR = Path(__file__).resolve().parents[1]
@@ -37,12 +41,27 @@ from strategy_engine.repositories import FirestoreStrategyRepository, init_fires
 
 
 KST = ZoneInfo("Asia/Seoul")
-REENTRY_BLOCK_EXIT_REASONS = {"negative_score_exit", "trailing_stop", "profit_lock_trailing_stop", "same_day_stop_loss", "score_rotation"}
+REENTRY_BLOCK_EXIT_REASONS = {"negative_score_exit", "trailing_stop", "profit_lock_trailing_stop", "same_day_stop_loss", "score_rotation", "unranked_rotation"}
 
 
-def load_server_env() -> None:
-    """Read functions/.env regardless of cron's working directory."""
-    load_dotenv(os.getenv("MESUGAK_ENV_FILE") or str(FUNCTIONS_DIR / ".env"))
+def load_server_env(env_path: str | None = None) -> None:
+    """Read .env.server, functions/.env, and custom env file in order."""
+    root_dir = FUNCTIONS_DIR.parent
+    server_env = root_dir / ".env.server"
+    if server_env.exists():
+        load_dotenv(server_env)
+    base_env = FUNCTIONS_DIR / ".env"
+    if base_env.exists():
+        load_dotenv(base_env)
+    target = env_path or os.getenv("MESUGAK_ENV_FILE")
+    if target:
+        # An explicit contest/test file is allowed to override the server
+        # defaults. Do not reload functions/.env with override=True: doing so
+        # could replace credentials loaded from .env.server with placeholders.
+        target_path = Path(target).expanduser()
+        if not target_path.is_absolute():
+            target_path = root_dir / target_path
+        load_dotenv(target_path, override=True)
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -82,6 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--skip-account-sync", action="store_true", help="Do not sync the KIS paper account before deciding orders")
     parser.add_argument("--process-refresh-requests", action="store_true", help="Process web-triggered KIS balance refresh requests only; never submit orders")
     parser.add_argument("--refresh-request-limit", type=int, default=int(os.getenv("MESUGAK_REFRESH_REQUEST_LIMIT", "5")))
+    parser.add_argument("--env-file", default=None, help="Path to custom environment file (e.g. functions/.env.contest)")
     parser.add_argument("--cred-path", default=None)
     return parser
 
@@ -276,8 +296,12 @@ def choose_live_candidates(
     ranked = sorted((item for item in candidates if item.get("code")), key=lambda item: _float_value(item.get("confidenceScore")), reverse=True)
     max_live = max(1, int(args.max_live_candidates))
     max_scan = max(max_live, int(getattr(args, "max_live_scan_candidates", max_live * 3) or max_live * 3))
-    scan_pool = ranked[:max_scan]
+    scan_pool = list(ranked[:max_scan])
     position_codes = {str(code) for code in positions}
+    candidate_map = {str(item.get("code")): item for item in candidates if item.get("code")}
+    for code in position_codes:
+        if code in candidate_map and all(str(item.get("code")) != code for item in scan_pool):
+            scan_pool.append(candidate_map[code])
     scan_codes = [str(item.get("code")) for item in scan_pool if item.get("code")]
     # Exit checks are time-sensitive: request held symbols first, then use the
     # remaining rate-limited calls for the larger candidate observation pool.
@@ -422,8 +446,12 @@ def build_runtime_state(
 
 
 def save_runtime_state(repo: FirestoreStrategyRepository, payload: dict) -> None:
-    repo.save_intraday_runtime_state(payload)
-    repo.append_intraday_runtime_event(payload)
+    # Keep the runner usable with lightweight repositories used by tests and
+    # migration tools; the production Firestore repository implements both.
+    if hasattr(repo, "save_intraday_runtime_state"):
+        repo.save_intraday_runtime_state(payload)
+    if hasattr(repo, "append_intraday_runtime_event"):
+        repo.append_intraday_runtime_event(payload)
 
 
 def sync_account_runtime_event(
@@ -642,7 +670,7 @@ def _parse_time(raw: str) -> clock_time:
 
 
 def run_loop(args: argparse.Namespace) -> None:
-    load_server_env()
+    load_server_env(getattr(args, "env_file", None))
     repo = FirestoreStrategyRepository(init_firestore(args.cred_path))
     client = KISPaperClient(KISPaperConfig.from_env())
     candidates = repo.fetch_meta_candidates(str(args.market).upper())
@@ -654,10 +682,10 @@ def run_loop(args: argparse.Namespace) -> None:
         return
     try:
         trading_day = client.is_trading_day(now.date())
-    except Exception as exc:  # noqa: BLE001 - KIS virtual API may reject the holiday TR.
-        trading_day = True
+    except Exception as exc:  # noqa: BLE001 - fail closed when the calendar is unavailable.
+        trading_day = False
         log_event({
-            "status": "holiday_check_failed_continue_weekday",
+            "status": "holiday_check_failed_fail_closed",
             "date": now.date().isoformat(),
             "type": type(exc).__name__,
             "message": str(exc),
@@ -686,7 +714,15 @@ def run_loop(args: argparse.Namespace) -> None:
 
 
 if __name__ == "__main__":
-    load_server_env()
+    custom_env = None
+    for idx, arg in enumerate(sys.argv):
+        if arg == "--env-file" and idx + 1 < len(sys.argv):
+            custom_env = sys.argv[idx + 1]
+            break
+        if arg.startswith("--env-file="):
+            custom_env = arg.split("=", 1)[1]
+            break
+    load_server_env(custom_env)
     arguments = build_parser().parse_args()
     if arguments.process_refresh_requests:
         refresh_repo = FirestoreStrategyRepository(init_firestore(arguments.cred_path))

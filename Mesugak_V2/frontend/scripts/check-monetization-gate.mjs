@@ -24,10 +24,15 @@ if (gate.adsRequested && gate.adsensePlacementApproved) {
   } else if (!readFileSync(adsTxtPath, 'utf8').split(/\r?\n/).includes(expected)) {
     fail('ads.txt does not contain the exact approved Google publisher line.');
   }
-  const indexPath = resolve(root, 'index.html');
-  const indexHtml = existsSync(indexPath) ? readFileSync(indexPath, 'utf8') : '';
-  if (!indexHtml.includes('fundingchoicesmessages.google.com')) {
-    fail('AdSense is enabled but the Google CMP message script is missing from frontend/index.html. Paste the exact account-specific snippet from AdSense Privacy & messaging.');
+  const bootstrapPath = resolve(root, 'src', 'adsenseClient.js');
+  const mainPath = resolve(root, 'src', 'main.jsx');
+  const bootstrap = existsSync(bootstrapPath) ? readFileSync(bootstrapPath, 'utf8') : '';
+  const main = existsSync(mainPath) ? readFileSync(mainPath, 'utf8') : '';
+  if (!bootstrap.includes('pagead2.googlesyndication.com/pagead/js/adsbygoogle.js')) {
+    fail('AdSense is enabled but the publisher-tag loader is missing.');
+  }
+  if (!bootstrap.includes('window.googlefc.callbackQueue') || !main.includes('startAdSense')) {
+    fail('AdSense is enabled but the Google CMP bootstrap is not initialized before the app.');
   }
 }
 

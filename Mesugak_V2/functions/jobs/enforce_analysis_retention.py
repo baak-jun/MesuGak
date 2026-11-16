@@ -34,7 +34,7 @@ from strategy_engine.market_data import load_market_universe
 from strategy_engine.repositories import init_firestore
 
 
-MAX_RETENTION_STOCKS = 1000
+MAX_RETENTION_STOCKS = 200
 # The reviewed inventory is 4,315 documents; leave a small bounded margin.
 MAX_SCAN_DOCUMENTS = 5000
 MAX_DELETE_DOCUMENTS = 5000
@@ -55,7 +55,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-stocks",
         type=int,
         default=None,
-        help="Number of current universe documents to keep (default: MESUGAK_MAX_STOCKS or 1000)",
+        help=(
+            "Number of current universe documents to keep "
+            f"(default: MESUGAK_MAX_STOCKS or {MAX_RETENTION_STOCKS}; hard cap)"
+        ),
     )
     parser.add_argument("--cred-path", default=None)
     parser.add_argument("--root", type=Path, default=PROJECT_ROOT / "runtime")
@@ -72,7 +75,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def resolve_limit(value: int | None) -> int:
     if value is None:
-        value = int(os.getenv("MESUGAK_RETENTION_MAX_STOCKS", os.getenv("MESUGAK_MAX_STOCKS", "1000")))
+        default = os.getenv("MESUGAK_MAX_STOCKS", str(MAX_RETENTION_STOCKS))
+        value = int(os.getenv("MESUGAK_RETENTION_MAX_STOCKS", default))
     value = int(value)
     if not 1 <= value <= MAX_RETENTION_STOCKS:
         raise ValueError(f"Retention limit must be between 1 and {MAX_RETENTION_STOCKS}")

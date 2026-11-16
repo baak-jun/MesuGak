@@ -2,15 +2,24 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://mesu-gak.web.app/</loc></url>
   <url><loc>https://mesu-gak.web.app/learn</loc></url>
+  <url><loc>https://mesu-gak.web.app/learn/articles</loc></url>
+  <url><loc>https://mesu-gak.web.app/learn/articles/ichimoku</loc></url>
+  <url><loc>https://mesu-gak.web.app/learn/articles/bollinger</loc></url>
+  <url><loc>https://mesu-gak.web.app/learn/articles/moving-average</loc></url>
+  <url><loc>https://mesu-gak.web.app/learn/articles/rsi</loc></url>
+  <url><loc>https://mesu-gak.web.app/learn/articles/volume</loc></url>
+  <url><loc>https://mesu-gak.web.app/learn/articles/valuation</loc></url>
   <url><loc>https://mesu-gak.web.app/learn/ichimoku</loc></url>
   <url><loc>https://mesu-gak.web.app/learn/bollinger</loc></url>
   <url><loc>https://mesu-gak.web.app/learn/moving-average</loc></url>
   <url><loc>https://mesu-gak.web.app/learn/rsi</loc></url>
   <url><loc>https://mesu-gak.web.app/learn/volume</loc></url>
   <url><loc>https://mesu-gak.web.app/learn/valuation</loc></url>
+  <url><loc>https://mesu-gak.web.app/learn/cases</loc></url>
+  <url><loc>https://mesu-gak.web.app/learn/lab</loc></url>
+  <url><loc>https://mesu-gak.web.app/learn/glossary</loc></url>
   <url><loc>https://mesu-gak.web.app/methodology</loc></url>
   <url><loc>https://mesu-gak.web.app/about</loc></url>
-  <url><loc>https://mesu-gak.web.app/analysis</loc></url>
   <url><loc>https://mesu-gak.web.app/terms</loc></url>
   <url><loc>https://mesu-gak.web.app/privacy</loc></url>
   <url><loc>https://mesu-gak.web.app/data</loc></url>

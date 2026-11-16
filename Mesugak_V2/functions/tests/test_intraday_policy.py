@@ -68,5 +68,71 @@ class IntradayPolicyTests(unittest.TestCase):
         )
 
         self.assertEqual([(order["side"], order["code"], order["reason"]) for order in orders], [("SELL", "TODAY", "same_day_stop_loss")])
+
+    def test_unranked_missing_candidate_is_rotated_first_when_cash_needed(self) -> None:
+        positions = {
+            "UNRANKED": {"code": "UNRANKED", "name": "Unranked Stock", "quantity": 10, "buyPrice": 100, "highestPrice": 100},
+            "RANKED_GOOD": {"code": "RANKED_GOOD", "name": "Good Stock", "quantity": 10, "buyPrice": 100, "highestPrice": 100},
+        }
+        candidates = [
+            {"code": "RANKED_GOOD", "confidenceScore": 80},
+            {"code": "NEW_STAR", "confidenceScore": 75, "status": "BUY_CANDIDATE"},
+        ]
+        prices = {"UNRANKED": 100, "RANKED_GOOD": 100, "NEW_STAR": 100}
+        orders = build_intraday_orders(candidates, positions, 2_000, 0, prices)
+
+        self.assertEqual(
+            [(order["side"], order["code"], order["reason"]) for order in orders],
+            [
+                ("SELL", "UNRANKED", "unranked_rotation"),
+                ("BUY", "NEW_STAR", "daily_score_entry"),
+            ],
+        )
+
+    def test_unranked_missing_candidate_is_rotated_even_if_at_loss(self) -> None:
+        positions = {
+            "UNRANKED_LOSS": {"code": "UNRANKED_LOSS", "name": "Losing Unranked", "quantity": 10, "buyPrice": 100, "highestPrice": 100},
+            "RANKED_HELD": {"code": "RANKED_HELD", "name": "Ranked Stock", "quantity": 10, "buyPrice": 100, "highestPrice": 100},
+        }
+        candidates = [
+            {"code": "RANKED_HELD", "confidenceScore": 70},
+            {"code": "NEW_STAR", "confidenceScore": 75, "status": "BUY_CANDIDATE"},
+        ]
+        # UNRANKED_LOSS is at 95 (loss of -5%), RANKED_HELD is at 100 (flat)
+        prices = {"UNRANKED_LOSS": 95, "RANKED_HELD": 100, "NEW_STAR": 100}
+        orders = build_intraday_orders(candidates, positions, 2_000, 0, prices)
+
+        self.assertEqual(
+            [(order["side"], order["code"], order["reason"]) for order in orders],
+            [
+                ("SELL", "UNRANKED_LOSS", "unranked_rotation"),
+                ("BUY", "NEW_STAR", "daily_score_entry"),
+            ],
+        )
+
+    def test_multiple_unranked_candidates_rotate_worst_pnl_first(self) -> None:
+        positions = {
+            "U_PROFIT": {"code": "U_PROFIT", "quantity": 10, "buyPrice": 100, "highestPrice": 102},
+            "U_LOSS": {"code": "U_LOSS", "quantity": 10, "buyPrice": 100, "highestPrice": 100},
+        }
+        candidates = [
+            {"code": "NEW_STAR", "confidenceScore": 75, "status": "BUY_CANDIDATE"},
+        ]
+        prices = {"U_PROFIT": 102, "U_LOSS": 95, "NEW_STAR": 100}
+        # account_equity = 2,000, target_amount = 200 (10%).
+        # U_LOSS is at -5% (within 8% trailing stop), U_PROFIT is at +2% (below 3% profit lock).
+        # Selling U_LOSS gives 10 * 95 = 950 cash >= 200 target_amount.
+        # Therefore U_PROFIT should NOT be sold!
+        orders = build_intraday_orders(candidates, positions, 2_000, 0, prices)
+
+        self.assertEqual(
+            [(order["side"], order["code"], order["reason"]) for order in orders],
+            [
+                ("SELL", "U_LOSS", "unranked_rotation"),
+                ("BUY", "NEW_STAR", "daily_score_entry"),
+            ],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

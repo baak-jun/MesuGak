@@ -1,0 +1,16 @@
+export const adsenseSlotCountByRoute = Object.freeze({
+  '/learn/ichimoku': 1,
+  '/learn/bollinger': 1,
+  '/learn/moving-average': 1,
+  '/learn/rsi': 1,
+  '/learn/volume': 1,
+  '/learn/valuation': 1,
+  '/learn/articles/ichimoku': 2,
+  '/learn/articles/bollinger': 2,
+  '/learn/articles/moving-average': 2,
+  '/learn/articles/rsi': 2,
+  '/learn/articles/volume': 2,
+  '/learn/articles/valuation': 2,
+  '/learn/cases': 2,
+  '/learn/glossary': 1,
+});

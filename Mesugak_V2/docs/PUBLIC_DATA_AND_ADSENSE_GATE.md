@@ -45,15 +45,17 @@ Do not enable AdSense merely because the technical check passes. All of the
 following are required first:
 
 1. The public-data gate above is complete for the exact pages where ads appear.
-2. The AdSense account and this site are approved; obtain the real `ca-pub-...`
-   client ID and separate numeric ad-unit slot IDs for authored learning pages
-   and the optional public-analysis placement.
+2. The AdSense account and this site are approved; use the real `ca-pub-...`
+   client ID and numeric ad-unit slot IDs supplied by the account. Keep
+   analysis-page advertising disabled unless its page and data-use scope are
+   reviewed separately.
 3. Privacy notice, cookie notice, opt-out/consent flows, and region handling are
    reviewed for the actual audience. For EEA/UK/Switzerland traffic, use a
    Google-certified CMP integrated with the IAB TCF before global serving.
-   If using Google's CMP, paste the exact account-specific message script from
-   AdSense Privacy & messaging into frontend/index.html; an environment flag
-   alone is not a live CMP.
+   If using Google's CMP, publish the European regulations message in AdSense
+   Privacy & messaging and load the account's AdSense publisher tag before the
+   application. In this frontend the gated bootstrap is `src/adsenseClient.js`;
+   an environment flag alone is not a live CMP.
 4. Publish the exact root `ads.txt` seller line using the AdSense-provided
    publisher ID and verify it returns HTTP 200 at `/ads.txt`.
 5. Keep a dated legal/policy sign-off reference and verify that ads are visibly
@@ -106,3 +108,21 @@ identifier, not a secret, but it must exactly match the AdSense account.
 
 Re-check all sources and actual agreements at the time of release because
 provider terms and regional regulatory requirements can change.
+
+## Current editorial placement map — 2026-11-16
+
+`frontend/src/adsensePlacementPolicy.js` is the shared route/count allowlist for
+the build and live-site preflights. The current release uses the operator's
+approved responsive display unit at 21 in-content positions across 14 authored
+routes:
+
+- Six short indicator lessons: one at the end of each lesson, after its
+  explanation, caveat, and references.
+- Six long indicator articles: two in the article body, after sections 3 and 7.
+- The eight-case study collection: two between case groups, after cases 3 and 6.
+- The 15-term glossary: one after the complete term list and before its FAQ.
+
+Do not place ads on the home or learning hubs, article index, interactive lab,
+search or analysis screens, admin screens, loading/error screens, or legal and
+privacy pages. Keep ads visually labelled and separated from navigation,
+buttons, and article links. `VITE_ENABLE_ANALYSIS_ADS` remains `false`.

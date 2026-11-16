@@ -25,7 +25,7 @@ from strategy_engine.market_data import PublicDataClient, get_public_data_client
 KST = ZoneInfo("Asia/Seoul")
 PACIFIC = ZoneInfo("America/Los_Angeles")
 DEFAULT_START_HOUR = 13
-DEFAULT_END_HOUR = 20
+DEFAULT_END_HOUR = 23
 DEFAULT_RETRY_MINUTES = 30
 
 

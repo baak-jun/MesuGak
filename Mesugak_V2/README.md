@@ -1,5 +1,7 @@
 # Mesugak V2
 
+현재 배포 상태, 학교 서버 접속, 대회·웹 로직과 파일 복사본은 [운영 인수인계](docs/operations/README.md)에 정리되어 있습니다. 아래 초기 재구축 설명과 현재 운영 상태는 구분해 읽어 주세요.
+
 [![Mesugak V2 CI](https://github.com/baak-jun/MesuGak/actions/workflows/mesugak-v2-ci.yml/badge.svg)](https://github.com/baak-jun/MesuGak/actions/workflows/mesugak-v2-ci.yml)
 
 Mesugak V2 rebuilds the project around a strategy engine instead of a Bollinger-only scanner.

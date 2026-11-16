@@ -113,7 +113,16 @@ def build_intraday_orders(
     session_day = session_date or datetime.now(KST).date()
     positions = update_high_water_marks(positions, prices)
     blocked_codes = {str(code) for code in (entry_blocked_codes or set())}
-    candidate_by_code = {str(item.get("code")): item for item in candidates if item.get("code")}
+    candidate_by_code = {
+        str(item.get("code")): item
+        for item in candidates
+        if item.get("code")
+        and (
+            item.get("confidenceScore") is not None
+            or item.get("score") is not None
+            or item.get("dailyConfidenceScore") is not None
+        )
+    }
     orders: list[dict[str, Any]] = []
 
     for code, position in positions.items():
@@ -150,22 +159,43 @@ def build_intraday_orders(
             held = [p for key, p in positions.items() if key not in exiting]
             if not held:
                 continue
-            weakest = min(held, key=lambda p: _score(candidate_by_code.get(str(p.get("code")), {})))
-            weakest_code = str(weakest.get("code"))
-            weakest_score = _score(candidate_by_code.get(weakest_code, {}))
-            if _score(candidate) < weakest_score + cfg.rotation_score_gap:
-                continue
-            if weakest_score <= cfg.score_exit_threshold:
-                orders.append({"side": "SELL", "code": weakest_code, "name": weakest.get("name", weakest_code), "targetWeight": 0, "tradeAmount": 0, "reason": "score_rotation"})
-                exiting.add(weakest_code)
-                available_cash += _price(weakest, prices) * float(weakest.get("quantity", 0) or 0)
-            elif all(_pnl_pct(position, prices) >= 0 for position in held):
-                fraction = 1.0 / len(held)
-                for position in held:
-                    code_to_trim = str(position.get("code"))
-                    amount = _price(position, prices) * float(position.get("quantity", 0) or 0) * fraction
-                    orders.append({"side": "SELL", "code": code_to_trim, "name": position.get("name", code_to_trim), "targetWeight": fraction, "tradeAmount": amount, "reason": "proportional_profit_take"})
-                    available_cash += amount
+
+            unranked_held = [p for p in held if str(p.get("code")) not in candidate_by_code]
+            while unranked_held and available_cash < target_amount:
+                target_to_sell = min(unranked_held, key=lambda p: _pnl_pct(p, prices))
+                target_code = str(target_to_sell.get("code"))
+                orders.append({
+                    "side": "SELL",
+                    "code": target_code,
+                    "name": target_to_sell.get("name", target_code),
+                    "targetWeight": 0,
+                    "tradeAmount": 0,
+                    "reason": "unranked_rotation",
+                })
+                exiting.add(target_code)
+                available_cash += _price(target_to_sell, prices) * float(target_to_sell.get("quantity", 0) or 0)
+                unranked_held = [p for p in unranked_held if str(p.get("code")) != target_code]
+
+            if available_cash < target_amount:
+                remaining_held = [p for key, p in positions.items() if key not in exiting and str(p.get("code")) in candidate_by_code]
+                if not remaining_held:
+                    continue
+                weakest = min(remaining_held, key=lambda p: _score(candidate_by_code.get(str(p.get("code")), {})))
+                weakest_code = str(weakest.get("code"))
+                weakest_score = _score(candidate_by_code.get(weakest_code, {}))
+                if _score(candidate) < weakest_score + cfg.rotation_score_gap:
+                    continue
+                if weakest_score <= cfg.score_exit_threshold:
+                    orders.append({"side": "SELL", "code": weakest_code, "name": weakest.get("name", weakest_code), "targetWeight": 0, "tradeAmount": 0, "reason": "score_rotation"})
+                    exiting.add(weakest_code)
+                    available_cash += _price(weakest, prices) * float(weakest.get("quantity", 0) or 0)
+                elif all(_pnl_pct(position, prices) >= 0 for position in remaining_held):
+                    fraction = 1.0 / len(remaining_held)
+                    for position in remaining_held:
+                        code_to_trim = str(position.get("code"))
+                        amount = _price(position, prices) * float(position.get("quantity", 0) or 0) * fraction
+                        orders.append({"side": "SELL", "code": code_to_trim, "name": position.get("name", code_to_trim), "targetWeight": fraction, "tradeAmount": amount, "reason": "proportional_profit_take"})
+                        available_cash += amount
         if available_cash >= target_amount and prices.get(code, 0) > 0:
             orders.append({"side": "BUY", "code": code, "name": candidate.get("name", code), "targetWeight": cfg.position_weight, "tradeAmount": target_amount, "reason": "daily_score_entry"})
             available_cash -= target_amount

@@ -103,6 +103,7 @@ class LocalCheckpointManager:
         if code not in self.done_codes():
             self.state["doneCodes"].append(code)
             self.state["summaries"].append(summary)
+        self.state['failedCodes'] = [item for item in self.state.get('failedCodes', []) if item.get('code') != code]
         self.state["remainingCount"] = int(remaining_count)
         self.state["updatedAt"] = now_iso()
         self._atomic_write()

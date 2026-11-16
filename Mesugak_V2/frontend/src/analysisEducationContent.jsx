@@ -27,7 +27,13 @@ const analysisReasonLabels = {
   ichimoku_price_above_cloud: '주가가 구름대 위에 위치', ichimoku_price_below_cloud: '주가가 구름대 아래에 위치', ichimoku_tenkan_above_kijun: '전환선이 기준선 위에 위치', ichimoku_tenkan_below_kijun: '전환선이 기준선 아래에 위치', ichimoku_forward_cloud_bullish: '선행 구름이 상승 방향', ichimoku_forward_cloud_bearish: '선행 구름이 하락 방향', bollinger_state_squeeze_release_up: '밴드 수축 뒤 상방 확장 조건', bollinger_state_squeeze: '밴드 수축 상태', bollinger_state_upper_band_release: '상단 밴드 확장 조건', bollinger_state_below_lower_band: '하단 밴드 이탈 주의', ma_support_lower_band_above_ma60: '하단 밴드가 장기 이동평균 위에 위치', ma_support_lower_band_cross_above_ma60: '하단 밴드가 장기 이동평균을 상향 통과', ma_support_lower_band_cross_below_ma60: '하단 밴드가 장기 이동평균을 하향 통과', rsi_crossed_above_50_with_signal: 'RSI가 기준선 위로 회복', rsi_oversold_recovery: 'RSI 과매도 구간 회복', rsi_breakdown: 'RSI 약화 신호', price_breakout_with_relative_volume: '가격 확장과 거래량 확인', squeeze_release_lacks_volume: '확장 조건 대비 거래량 확인 부족', below_bollinger_lower: '하단 밴드 이탈', downside_band_expansion: '하방 밴드 확장', below_ichimoku_cloud: '구름대 하단 이탈', failed_box_breakout: '박스권 돌파 실패', bollinger_lower_crossed_above_ma60: '하단 밴드가 장기 이평선을 상향 돌파', bollinger_lower_above_ma60: '하단 밴드가 장기 이평선 위에 위치', bollinger_lower_crossed_below_ma60: '하단 밴드가 장기 이평선을 하향 돌파', negative_or_zero_earnings: '적자 또는 이익 없음', low_per: '낮은 PER', reasonable_per: '적정 PER', elevated_but_positive_per: '다소 높은 PER', high_per: '높은 PER', low_pbr: '낮은 PBR', reasonable_pbr: '적정 PBR', high_pbr: '높은 PBR', high_roe: '높은 ROE', positive_roe: '양의 ROE', negative_roe: '음의 ROE', manageable_debt: '관리 가능한 부채비율', high_debt: '높은 부채비율', operating_profit_growing: '영업이익 성장', operating_profit_shrinking: '영업이익 감소', price_above_cloud: '주가가 구름대 위에 위치', price_below_cloud: '주가가 구름대 아래에 위치', tenkan_above_kijun: '전환선이 기준선 위에 위치', tenkan_below_kijun: '전환선이 기준선 아래에 위치', bullish_forward_cloud: '선행 구름이 상승 방향', bearish_forward_cloud: '선행 구름이 하락 방향', chikou_confirmed: '후행스팬이 추세 확인', chikou_below_past_price: '후행스팬이 과거 주가 하회', bearish_rsi_divergence: 'RSI 하락 다이버전스', penalty_below_lower_band: '하단 밴드 이탈', valuation_state_valued: '가치 참고 조건 충족',
 };
 
-export function analysisReasonLabel(value) { const key = String(value || '').toLowerCase(); return analysisReasonLabels[key] || key.replaceAll('_', ' '); }
+export function analysisReasonLabel(value) {
+  const key = String(value || '').toLowerCase();
+  // An unmapped backend key must never leak an English/internal identifier into
+  // the public classroom. The detail lesson below remains neutral until an
+  // operator adds a reviewed explanation to this central content file.
+  return analysisReasonLabels[key] || '추가 해설이 필요한 조건';
+}
 
 const publicReasonLabels = {
   ichimoku_bearish_forward_cloud: '선행 구름은 약세 방향',
@@ -584,6 +590,55 @@ export const educationalGuides = {
       }
     ]
   },
+  volume: {
+    title: '거래량을 함께 읽는 법',
+    points: [
+      {
+        label: '돌파와 평균 거래량 비교',
+        desc: '가상의 장면에서 가격이 최근 고점을 넘어가고 거래량 막대도 같은 종목의 최근 평균보다 커졌다고 해 보겠습니다. 가격 방향과 참여 규모가 함께 움직이는지 확인하는 순서를 그림으로 익혀요.',
+        graphic: (
+          <svg role="img" aria-label="가격 돌파와 평균보다 큰 거래량을 함께 보여 주는 가상 예시" viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+            <line x1="12" y1="76" x2="288" y2="76" stroke="var(--border)" strokeWidth="1" />
+            <line x1="12" y1="96" x2="288" y2="96" stroke="var(--border)" strokeWidth="1" />
+            <path d="M 15,66 Q 65,60 105,63 T 180,45 T 285,24" fill="none" stroke="#2563eb" strokeWidth="2.5" />
+            <line x1="15" y1="53" x2="285" y2="53" stroke="var(--text-soft)" strokeWidth="1" strokeDasharray="4,4" />
+            <rect x="24" y="86" width="12" height="10" fill="rgba(37,99,235,.35)" />
+            <rect x="52" y="82" width="12" height="14" fill="rgba(37,99,235,.35)" />
+            <rect x="80" y="88" width="12" height="8" fill="rgba(37,99,235,.35)" />
+            <rect x="108" y="80" width="12" height="16" fill="rgba(37,99,235,.35)" />
+            <rect x="136" y="84" width="12" height="12" fill="rgba(37,99,235,.35)" />
+            <rect x="164" y="78" width="12" height="18" fill="rgba(37,99,235,.35)" />
+            <rect x="192" y="60" width="12" height="36" fill="#10b981" />
+            <rect x="220" y="68" width="12" height="28" fill="rgba(16,185,129,.75)" />
+            <rect x="248" y="73" width="12" height="23" fill="rgba(16,185,129,.75)" />
+            <text x="18" y="48" fontSize="10" fill="var(--text-soft)">최근 고점 기준</text>
+            <text x="188" y="54" fontSize="11" fill="#047857" fontWeight="bold">가격 돌파</text>
+            <text x="186" y="116" fontSize="10" fill="var(--text-soft)">거래량도 평균보다 커짐</text>
+          </svg>
+        ),
+      },
+      {
+        label: '거래량 급증만으로 방향을 정하지 않기',
+        desc: '거래량이 갑자기 커진 날에도 가격이 위로 움직였는지 아래로 움직였는지, 다음 봉에서 유지됐는지를 따로 봐야 합니다. 같은 큰 막대라도 의미가 달라질 수 있다는 점을 그림으로 비교해요.',
+        graphic: (
+          <svg role="img" aria-label="상승과 하락에서 모두 거래량 급증이 나타날 수 있음을 보여 주는 가상 예시" viewBox="0 0 300 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+            <line x1="150" y1="18" x2="150" y2="108" stroke="var(--border)" strokeWidth="1" strokeDasharray="3,3" />
+            <path d="M 18,70 L 58,62 L 95,42 L 132,28" fill="none" stroke="#10b981" strokeWidth="2.5" />
+            <rect x="24" y="88" width="13" height="15" fill="rgba(16,185,129,.35)" />
+            <rect x="59" y="82" width="13" height="21" fill="rgba(16,185,129,.35)" />
+            <rect x="94" y="48" width="13" height="55" fill="#10b981" />
+            <text x="75" y="20" textAnchor="middle" fontSize="11" fill="#047857" fontWeight="bold">상승 + 거래량 급증</text>
+            <path d="M 168,34 L 205,45 L 242,63 L 282,82" fill="none" stroke="#ef4444" strokeWidth="2.5" />
+            <rect x="174" y="86" width="13" height="17" fill="rgba(239,68,68,.35)" />
+            <rect x="209" y="80" width="13" height="23" fill="rgba(239,68,68,.35)" />
+            <rect x="244" y="38" width="13" height="65" fill="#ef4444" />
+            <text x="225" y="20" textAnchor="middle" fontSize="11" fill="#b91c1c" fontWeight="bold">하락 + 거래량 급증</text>
+            <text x="150" y="116" textAnchor="middle" fontSize="10" fill="var(--text-soft)">방향과 다음 봉 유지 여부를 함께 확인</text>
+          </svg>
+        ),
+      },
+    ],
+  },
   valuation: {
     title: '가치 참고값 읽는 법',
     points: [
@@ -707,6 +762,11 @@ const reasonGraphicMap = {
   rsi_crossed_above_50_with_signal: ['rsi', 0],
   rsi_oversold_recovery: ['rsi', 1],
   rsi_breakdown: ['rsi', 2],
+  price_breakout_with_relative_volume: ['volume', 0],
+  breakout_confirmed: ['volume', 0],
+  squeeze_release_weak_volume: ['volume', 1],
+  squeeze_release_lacks_volume: ['volume', 1],
+  no_volume_setup: ['volume', 1],
   valued: ['valuation', 0],
   valuation_state_valued: ['valuation', 0],
   low_pbr: ['valuation', 1],

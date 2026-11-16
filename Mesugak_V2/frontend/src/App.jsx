@@ -4,6 +4,9 @@ import { LearningPage, normalizeLearningRoute } from './LearningPages.jsx';
 import './legal.css';
 import { BRAND_FULL, BRAND_SHORT } from './brand';
 import { trackPageView } from './analytics.js';
+import { AnalysisLoadingScene } from './LoadingScene.jsx';
+import { AnalysisLandingPage } from './AnalysisLandingPage.jsx';
+import { HomeLandingPage } from './HomeLandingPage.jsx';
 
 const ResearchApp = lazy(() => import('./ResearchApp.jsx'));
 
@@ -41,15 +44,17 @@ class AppErrorBoundary extends Component {
 function currentRoute() {
   const path = window.location.pathname.replace(/^\/+|\/+$/g, '');
   const legalRoute = normalizeLegalRoute(path) || normalizeLegalRoute(window.location.hash);
-  if (legalRoute) return { legalRoute, learningRoute: '', analysisRoute: false, notFound: false };
+  if (legalRoute) return { legalRoute, learningRoute: '', landingRoute: false, analysisRoute: false, notFound: false };
 
   const hashLearningRoute = window.location.hash ? normalizeLearningRoute(window.location.hash) : '';
-  const learningRoute = path ? (normalizeLearningRoute(path) || hashLearningRoute) : (hashLearningRoute || 'home');
-  if (learningRoute) return { legalRoute: '', learningRoute, analysisRoute: false, notFound: false };
-
   const hashValue = String(window.location.hash || '').replace(/^#\/?/, '').replace(/^\/+|\/+$/g, '');
   const analysisRoute = path === 'analysis' || hashValue === 'analysis';
-  return { legalRoute: '', learningRoute: '', analysisRoute, notFound: !analysisRoute };
+  if (analysisRoute) return { legalRoute: '', learningRoute: '', landingRoute: false, analysisRoute: true, notFound: false };
+
+  const learningRoute = path ? normalizeLearningRoute(path) : hashLearningRoute;
+  if (learningRoute) return { legalRoute: '', learningRoute, landingRoute: false, analysisRoute: false, notFound: false };
+  if (!path && !hashValue) return { legalRoute: '', learningRoute: '', landingRoute: true, analysisRoute: false, notFound: false };
+  return { legalRoute: '', learningRoute: '', landingRoute: false, analysisRoute: false, notFound: true };
 }
 
 function NotFoundPage() {
@@ -65,6 +70,23 @@ function NotFoundPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+function AnalysisRoute() {
+  const [interactive, setInteractive] = useState(false);
+
+  useEffect(() => {
+    // The first render must match the static analysis introduction for hydration.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setInteractive(true);
+  }, []);
+
+  if (!interactive) return <AnalysisLandingPage />;
+  return (
+    <Suspense fallback={<AnalysisLoadingScene />}>
+      <ResearchApp />
+    </Suspense>
   );
 }
 
@@ -87,13 +109,7 @@ export default function App() {
 
   return (
     <AppErrorBoundary>
-      {route.legalRoute ? <LegalPage pageKey={route.legalRoute} /> : route.learningRoute ? <LearningPage pageKey={route.learningRoute} /> : (
-        route.analysisRoute ? (
-          <Suspense fallback={<main className="app-loading-shell"><p>{BRAND_FULL}</p></main>}>
-            <ResearchApp />
-          </Suspense>
-        ) : <NotFoundPage />
-      )}
+      {route.legalRoute ? <LegalPage pageKey={route.legalRoute} /> : route.landingRoute ? <HomeLandingPage /> : route.learningRoute ? <LearningPage pageKey={route.learningRoute} /> : route.analysisRoute ? <AnalysisRoute /> : <NotFoundPage />}
     </AppErrorBoundary>
   );
 }

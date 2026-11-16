@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+import os
 from pathlib import Path
+import time
 from typing import Any, Protocol
 from .storage_policy import compact_analysis, archive_latest_analysis
 
@@ -98,8 +100,28 @@ def init_firestore(cred_path: str | Path | None = None):
 
 
 class FirestoreStrategyRepository:
-    def __init__(self, db):
+    PAPER_NAMESPACE_COLLECTIONS = {
+        "bot_portfolio",
+        "bot_trade_logs",
+        "bot_account_snapshot",
+        "intraday_trade_state",
+        "paper_trading_runtime",
+        "paper_trading_runtime_events",
+        "paper_order_applications",
+        "paper_performance_private",
+    }
+
+    def __init__(self, db, *, paper_namespace: str = ""):
         self.db = db
+        namespace = str(paper_namespace or "").strip().lower()
+        if namespace and not namespace.replace("_", "").isalnum():
+            raise ValueError("paper_namespace may contain only letters, digits, and underscores")
+        self.paper_namespace = namespace
+
+    def _paper_collection(self, collection_name: str):
+        if self.paper_namespace and collection_name in self.PAPER_NAMESPACE_COLLECTIONS:
+            collection_name = f"{self.paper_namespace}_{collection_name}"
+        return self.db.collection(collection_name)
 
     @staticmethod
     def _server_timestamp():
@@ -110,6 +132,49 @@ class FirestoreStrategyRepository:
     @staticmethod
     def _today() -> str:
         return datetime.now().strftime("%Y-%m-%d")
+
+    @staticmethod
+    def _commit_batch_with_retry(batch) -> None:
+        """Commit an idempotent Firestore batch with bounded transient retries.
+
+        A batch of ``set``/``delete`` operations can safely be retried after a
+        deadline or transport failure: repeating the same document mutations
+        does not create duplicate documents.  The retry count and base delay
+        stay configurable for the school server, while the defaults keep a
+        transient 504 from interrupting a full-market run immediately.
+        """
+        from google.api_core import exceptions as google_exceptions
+
+        transient_names = (
+            "Aborted",
+            "DeadlineExceeded",
+            "InternalServerError",
+            "ResourceExhausted",
+            "ServiceUnavailable",
+            "TooManyRequests",
+        )
+        transient_types = tuple(
+            exception_type
+            for name in transient_names
+            if (exception_type := getattr(google_exceptions, name, None)) is not None
+        )
+        try:
+            retries = max(0, int(os.getenv("MESUGAK_FIRESTORE_COMMIT_RETRIES", "3")))
+        except ValueError:
+            retries = 3
+        try:
+            base_delay = max(0.0, float(os.getenv("MESUGAK_FIRESTORE_COMMIT_RETRY_SECONDS", "2")))
+        except ValueError:
+            base_delay = 2.0
+        for attempt in range(retries + 1):
+            try:
+                batch.commit()
+                return
+            except transient_types:
+                if attempt >= retries:
+                    raise
+                if base_delay:
+                    time.sleep(base_delay * (2**attempt))
 
     def save_stock_analysis(self, doc_id: str, payload: dict[str, Any]) -> None:
         archive_latest_analysis(doc_id, payload)
@@ -127,7 +192,7 @@ class FirestoreStrategyRepository:
             data = compact_analysis(payload)
             data["updatedAt"] = server_ts
             batch.set(self.db.collection("stock_analysis").document(doc_id), data)
-        batch.commit()
+        self._commit_batch_with_retry(batch)
 
     def save_meta_chunk(self, market: str, index: int, items: list[dict[str, Any]]) -> None:
         self.db.collection("meta_data").document(f"meta_v2_{market}_{index}").set(
@@ -160,7 +225,7 @@ class FirestoreStrategyRepository:
             )
         for index in range(start_delete_index, max(start_delete_index, previous_count)):
             batch.delete(self.db.collection("meta_data").document(f"meta_v2_{market}_{index}"))
-        batch.commit()
+        self._commit_batch_with_retry(batch)
 
     def delete_meta_chunk(self, market: str, index: int) -> None:
         self.db.collection("meta_data").document(f"meta_v2_{market}_{index}").delete()
@@ -245,7 +310,7 @@ class FirestoreStrategyRepository:
                 "updatedAt": server_ts,
             },
         )
-        batch.commit()
+        self._commit_batch_with_retry(batch)
 
     def existing_public_chunk_count(self, market: str) -> int:
         manifest_doc = self.db.collection("public_analysis_meta").document(f"public_meta_v2_{market}_manifest").get()
@@ -265,7 +330,7 @@ class FirestoreStrategyRepository:
         self.db.collection("public_analysis_meta").document(f"public_meta_v2_{market}_{index}").delete()
 
     def fetch_intraday_trade_state(self, market: str, session_date: str) -> dict[str, Any]:
-        snapshot = self.db.collection("intraday_trade_state").document(f"{market}_{session_date}").get()
+        snapshot = self._paper_collection("intraday_trade_state").document(f"{market}_{session_date}").get()
         return snapshot.to_dict() if snapshot.exists else {}
 
     def save_intraday_trade_state(self, market: str, session_date: str, payload: dict[str, Any]) -> None:
@@ -273,7 +338,7 @@ class FirestoreStrategyRepository:
         data["market"] = market
         data["sessionDate"] = session_date
         data["updatedAt"] = self._server_timestamp()
-        self.db.collection("intraday_trade_state").document(f"{market}_{session_date}").set(data, merge=True)
+        self._paper_collection("intraday_trade_state").document(f"{market}_{session_date}").set(data, merge=True)
 
     def save_strategy_run(self, run_id: str, payload: dict[str, Any]) -> None:
         data = dict(payload)
@@ -314,12 +379,12 @@ class FirestoreStrategyRepository:
 
     def fetch_current_positions(self, collection_name: str = "bot_portfolio") -> dict[str, dict[str, Any]]:
         positions: dict[str, dict[str, Any]] = {}
-        for doc in self.db.collection(collection_name).stream():
+        for doc in self._paper_collection(collection_name).stream():
             positions[doc.id] = doc.to_dict() or {}
         return positions
 
     def fetch_account_snapshot(self, collection_name: str = "bot_account_snapshot", doc_id: str = "latest") -> dict[str, Any] | None:
-        snap = self.db.collection(collection_name).document(doc_id).get()
+        snap = self._paper_collection(collection_name).document(doc_id).get()
         return snap.to_dict() if snap.exists else None
 
     def fetch_rebalance_orders(self, market: str, allocation_id: str | None = None) -> list[dict[str, Any]]:
@@ -354,7 +419,7 @@ class FirestoreStrategyRepository:
         collection_name: str = "bot_portfolio",
         previous_codes: set[str] | None = None,
     ) -> None:
-        collection = self.db.collection(collection_name)
+        collection = self._paper_collection(collection_name)
         active_codes = set(positions)
         for code, position in positions.items():
             data = dict(position)
@@ -364,7 +429,7 @@ class FirestoreStrategyRepository:
             collection.document(code).delete()
 
     def append_trade_logs(self, logs: list[dict[str, Any]], collection_name: str = "bot_trade_logs") -> None:
-        collection = self.db.collection(collection_name)
+        collection = self._paper_collection(collection_name)
         for log in logs:
             data = dict(log)
             data["createdAt"] = self._server_timestamp()
@@ -380,14 +445,14 @@ class FirestoreStrategyRepository:
     ) -> None:
         data = dict(payload)
         data["updatedAt"] = self._server_timestamp()
-        self.db.collection(collection_name).document(doc_id).set(data, merge=True)
+        self._paper_collection(collection_name).document(doc_id).set(data, merge=True)
 
     def save_private_paper_performance(self, payload: dict[str, Any]) -> None:
         """Persist only the administrator-only aggregate benchmark comparison."""
         data = dict(payload)
         data["visibility"] = "admin_only"
         data["updatedAt"] = self._server_timestamp()
-        self.db.collection("paper_performance_private").document("latest").set(data, merge=True)
+        self._paper_collection("paper_performance_private").document("latest").set(data, merge=True)
     def fetch_pending_paper_refresh_requests(self, limit: int = 5) -> list[dict[str, Any]]:
         """Return web-requested KIS balance refreshes for the school server.
 
@@ -420,7 +485,7 @@ class FirestoreStrategyRepository:
     ) -> None:
         data = dict(payload)
         data["updatedAt"] = self._server_timestamp()
-        self.db.collection(collection_name).document(doc_id).set(data, merge=True)
+        self._paper_collection(collection_name).document(doc_id).set(data, merge=True)
 
     def append_intraday_runtime_event(
         self,
@@ -430,12 +495,12 @@ class FirestoreStrategyRepository:
     ) -> None:
         data = dict(payload)
         data["createdAt"] = self._server_timestamp()
-        self.db.collection(collection_name).add(data)
+        self._paper_collection(collection_name).add(data)
 
     def save_paper_order_application(self, application_id: str, payload: dict[str, Any]) -> None:
         data = dict(payload)
         data["updatedAt"] = self._server_timestamp()
-        self.db.collection("paper_order_applications").document(application_id).set(data, merge=True)
+        self._paper_collection("paper_order_applications").document(application_id).set(data, merge=True)
 
     def cleanup_past_data(
         self,
@@ -495,11 +560,11 @@ class FirestoreStrategyRepository:
                     batch_count += 1
                     deleted += 1
                     if batch_count >= batch_size:
-                        batch.commit()
+                        self._commit_batch_with_retry(batch)
                         batch = self.db.batch()
                         batch_count = 0
             if batch_count > 0:
-                batch.commit()
+                self._commit_batch_with_retry(batch)
         except Exception as exc:
             print(f"[cleanup] {collection_name} cleanup skipped: {exc}", flush=True)
         return deleted
@@ -524,11 +589,11 @@ class FirestoreStrategyRepository:
                     batch_count += 1
                     deleted += 1
                     if batch_count >= batch_size:
-                        batch.commit()
+                        self._commit_batch_with_retry(batch)
                         batch = self.db.batch()
                         batch_count = 0
             if batch_count > 0:
-                batch.commit()
+                self._commit_batch_with_retry(batch)
         except Exception as exc:
             print(f"[cleanup] strategy_runs cleanup skipped: {exc}", flush=True)
         return deleted
@@ -552,11 +617,11 @@ class FirestoreStrategyRepository:
                     batch_count += 1
                     deleted += 1
                     if batch_count >= batch_size:
-                        batch.commit()
+                        self._commit_batch_with_retry(batch)
                         batch = self.db.batch()
                         batch_count = 0
             if batch_count > 0:
-                batch.commit()
+                self._commit_batch_with_retry(batch)
         except Exception as exc:
             print(f"[cleanup] paper_refresh_requests cleanup skipped: {exc}", flush=True)
         return deleted
@@ -572,7 +637,7 @@ class FirestoreStrategyRepository:
                     batch = self.db.batch()
                     for doc in chunk:
                         batch.delete(doc.reference)
-                    batch.commit()
+                    self._commit_batch_with_retry(batch)
                     deleted += len(chunk)
         except Exception as exc:
             print(f"[cleanup] strategy_candidates cleanup skipped: {exc}", flush=True)

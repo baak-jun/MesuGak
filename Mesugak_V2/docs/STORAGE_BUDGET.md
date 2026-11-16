@@ -8,8 +8,8 @@ project-wide spending cap, and does not control browsers or legacy cloud jobs.
 Spark and removal of paid-service dependencies are needed for a provider-enforced
 no-overage policy. Do not claim zero cost while Blaze remains linked.
 
-- Analysis: one attempt per Pacific quota day, full local KOSPI candidate scan,
-  and no more than 1,000 Firestore result documents.
+- Analysis: one attempt per Pacific quota day, full local KR candidate scan,
+  and no more than 200 Firestore result documents.
 - Paper refresh: 48 attempts per Pacific quota day.
 - `runtime/cost/budget.sqlite3` persists reservations across process restarts.
   Failed/partial attempts consume allowance; do not delete this file to retry.

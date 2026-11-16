@@ -23,6 +23,8 @@ import { monetizationGate } from './monetizationGate';
 import { hasSubstantialAnalysisContent } from './contentPolicy';
 import { ComplianceDock } from './LegalPages.jsx';
 import { BRAND_FULL, BRAND_SHORT } from './brand';
+import { AnalysisLoadingScene } from './LoadingScene.jsx';
+import { AnalysisEducationGuide } from './AnalysisEducationGuide.jsx';
 import {
   AnalysisContentsRail,
   analysisReasonLabel,
@@ -349,6 +351,40 @@ function compactDate(value) {
   return text.length > 5 ? text.slice(5) : text;
 }
 
+function kstDateKey(value = new Date()) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    calendar: 'gregory',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value).filter(({ type }) => type !== 'literal').map(({ type, value: part }) => [type, part]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function businessDayAge(value, now = new Date()) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  const start = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  const endKey = kstDateKey(now).split('-').map(Number);
+  const end = Date.UTC(endKey[0], endKey[1] - 1, endKey[2]);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+  const cursor = new Date(start);
+  let age = 0;
+  while (cursor.getTime() < end) {
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+    const weekday = cursor.getUTCDay();
+    if (weekday !== 0 && weekday !== 6) age += 1;
+  }
+  return age;
+}
+
+function publicFreshnessNotice(value) {
+  const age = businessDayAge(value);
+  if (age === null || age < 3) return null;
+  return `기준일 ${value} 이후 주말을 제외한 평일 기준 ${age}일이 지났습니다. 공공데이터 제공 일정이나 학교 서버 갱신 지연 여부를 확인한 뒤 학습용 해석으로 읽어 주세요.`;
+}
+
 function statusLabel(value) {
   const key = String(value || 'UNKNOWN').toUpperCase();
   return statusLabels[key] || key.replaceAll('_', ' ');
@@ -365,10 +401,10 @@ function reasonLabel(value) {
 
 
 function publicConclusion(stock) {
-  if (stock.riskState === 'defensive') return '주의 조건의 비중이 높습니다. 이후 방향을 단정하지 않고 약화 요인과 다음 확정 일봉의 변화를 함께 확인해야 합니다.';
-  if (stock.confidence >= 70) return '여러 기술 조건의 일치도가 상대적으로 높게 계산됐습니다. 이는 과거·현재 조건의 요약이며 미래 가격 방향이나 수익을 예측하지 않습니다.';
-  if (stock.riskState === 'watch') return '긍정·주의 조건이 함께 나타나 관찰 대상으로 분류됐습니다. 추가 확인이 쌓일 때까지 방향을 단정하지 않습니다.';
-  return '현재 조건은 뚜렷한 방향성을 확정하기보다 중립적으로 추적하는 구간으로 해석했습니다.';
+  if (stock.riskState === 'defensive') return '걸리는 조건이 여럿 보여요. 아래 항목에서 어떤 신호가 약한지 읽고, 다음 확정 일봉에서는 달라지는지도 살펴보세요.';
+  if (stock.confidence >= 70) return '여러 조건이 같은 쪽을 가리켜 점수가 높게 나왔어요. 앞으로도 같은 흐름이 이어진다는 뜻은 아니니, 기준일과 조건별 의미를 함께 보세요.';
+  if (stock.riskState === 'watch') return '좋아 보이는 점과 걸리는 점이 함께 있어요. 어느 쪽이 이어지는지 다음 확정 일봉에서 다시 살펴보세요.';
+  return '지금은 한쪽으로 읽기엔 근거가 엇갈려요. 기준일과 각 조건을 차례로 살펴보세요.';
 }
 function riskStateFromPayload(payload) {
   const state = String(payload.riskState || payload.status || '').toLowerCase();
@@ -698,11 +734,140 @@ function IndicatorToggle({ active, label, onClick }) {
   );
 }
 
+const CHART_APPEARANCE_STORAGE_KEY = 'mesugak_admin_chart_appearance_v1';
+const DEFAULT_CHART_APPEARANCE = {
+  candleUp: '#ef4444',
+  candleDown: '#2563eb',
+  candleWidth: 0.58,
+  wickWidth: 1.4,
+  closeColor: '#0f766e',
+  closeWidth: 2.6,
+  bbUpperColor: '#d35c6d',
+  bbLowerColor: '#3e70a8',
+  bbWidth: 2.1,
+  bbMidColor: '#e09a22',
+  bbMidWidth: 1.8,
+  ma20Color: '#c78522',
+  ma20Width: 1.8,
+  ma60Color: '#506c7a',
+  ma60Width: 1.8,
+  rsiColor: '#14746f',
+  rsiWidth: 2.2,
+  rsiSignalColor: '#d78124',
+  rsiSignalWidth: 1.8,
+};
+
+const CHART_COLOR_KEYS = new Set([
+  'candleUp',
+  'candleDown',
+  'closeColor',
+  'bbUpperColor',
+  'bbLowerColor',
+  'bbMidColor',
+  'ma20Color',
+  'ma60Color',
+  'rsiColor',
+  'rsiSignalColor',
+]);
+
+function validChartColor(value, fallback) {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
+}
+
+function validChartNumber(value, fallback, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
+}
+
+function loadChartAppearance() {
+  if (typeof window === 'undefined') return { ...DEFAULT_CHART_APPEARANCE };
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(CHART_APPEARANCE_STORAGE_KEY) || '{}');
+    const legacyBbColor = validChartColor(saved.bbColor, null);
+    return Object.keys(DEFAULT_CHART_APPEARANCE).reduce((appearance, key) => {
+      if (CHART_COLOR_KEYS.has(key)) {
+        const fallback = key === 'bbUpperColor' || key === 'bbLowerColor'
+          ? legacyBbColor || DEFAULT_CHART_APPEARANCE[key]
+          : DEFAULT_CHART_APPEARANCE[key];
+        appearance[key] = validChartColor(saved[key], fallback);
+      } else if (key === 'candleWidth') {
+        appearance[key] = validChartNumber(saved[key], DEFAULT_CHART_APPEARANCE[key], 0.35, 0.9);
+      } else if (key === 'wickWidth') {
+        appearance[key] = validChartNumber(saved[key], DEFAULT_CHART_APPEARANCE[key], 0.8, 3);
+      } else {
+        appearance[key] = validChartNumber(saved[key], DEFAULT_CHART_APPEARANCE[key], 1, 4);
+      }
+      return appearance;
+    }, {});
+  } catch {
+    return { ...DEFAULT_CHART_APPEARANCE };
+  }
+}
+
+function ChartColorRow({ label, value, onChange }) {
+  return (
+    <div className="chart-style-row color-only">
+      <span className="chart-style-name">{label}</span>
+      <span className="chart-style-swatch" style={{ backgroundColor: value }} aria-hidden="true" />
+      <input type="color" value={value} aria-label={`${label} 색상`} onChange={(event) => onChange(event.target.value)} />
+    </div>
+  );
+}
+
+function ChartStyleRow({ label, color, width, onColorChange, onWidthChange }) {
+  return (
+    <div className="chart-style-row">
+      <span className="chart-style-name">{label}</span>
+      <span className="chart-style-swatch" style={{ backgroundColor: color }} aria-hidden="true" />
+      <input type="color" value={color} aria-label={`${label} 색상`} onChange={(event) => onColorChange(event.target.value)} />
+      <input
+        type="range"
+        min="1"
+        max="4"
+        step="0.1"
+        value={width}
+        aria-label={`${label} 선 두께`}
+        onChange={(event) => onWidthChange(Number(event.target.value))}
+      />
+      <output>{Number(width).toFixed(1)}px</output>
+    </div>
+  );
+}
+
+function ChartRangeRow({ label, value, min, max, step, unit, onChange }) {
+  return (
+    <div className="chart-range-row">
+      <span className="chart-style-name">{label}</span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        aria-label={label}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+      <output>{Number(value).toFixed(step < 0.1 ? 2 : 1)}{unit}</output>
+    </div>
+  );
+}
+
 function TechnicalChart({ stock }) {
   const [range, setRange] = useState(120);
   const [layers, setLayers] = useState({ candles: true, bollinger: true, ma: true, rsi: true });
+  const [appearance, setAppearance] = useState(loadChartAppearance);
   const history = useMemo(() => (stock.raw?.history?.length ? stock.raw.history : []), [stock.raw]);
   const rows = useMemo(() => (range === 'ALL' ? history : history.slice(-Number(range))), [history, range]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(CHART_APPEARANCE_STORAGE_KEY, JSON.stringify(appearance));
+    } catch {
+      // Local preference persistence is optional; chart interaction still works when storage is blocked.
+    }
+  }, [appearance]);
 
   if (!rows.length) {
     return (
@@ -736,14 +901,35 @@ function TechnicalChart({ stock }) {
   const domainMin = minPrice - pad;
   const domainMax = maxPrice + pad;
   const candleGap = (width - margin.left - margin.right) / Math.max(rows.length - 1, 1);
-  const candleWidth = Math.max(3, Math.min(10, candleGap * 0.58));
+  const candleWidth = Math.max(3, Math.min(10, candleGap * appearance.candleWidth));
   const xForIndex = (index) => margin.left + candleGap * index;
   const yForPrice = (value) => margin.top + ((domainMax - value) / (domainMax - domainMin || 1)) * priceHeight;
   const yForRsi = (value) => rsiTop + ((100 - Number(value || 0)) / 100) * 118;
   const latest = rows[rows.length - 1];
+  const updateAppearance = (key, value) => setAppearance((current) => ({ ...current, [key]: value }));
+  const chartStyle = {
+    '--chart-candle-up': appearance.candleUp,
+    '--chart-candle-down': appearance.candleDown,
+    '--chart-wick-width': String(appearance.wickWidth),
+    '--chart-close-color': appearance.closeColor,
+    '--chart-close-width': String(appearance.closeWidth),
+    '--chart-bb-upper-color': appearance.bbUpperColor,
+    '--chart-bb-lower-color': appearance.bbLowerColor,
+    '--chart-bb-width': String(appearance.bbWidth),
+    '--chart-bb-mid-color': appearance.bbMidColor,
+    '--chart-bb-mid-width': String(appearance.bbMidWidth),
+    '--chart-ma20-color': appearance.ma20Color,
+    '--chart-ma20-width': String(appearance.ma20Width),
+    '--chart-ma60-color': appearance.ma60Color,
+    '--chart-ma60-width': String(appearance.ma60Width),
+    '--chart-rsi-color': appearance.rsiColor,
+    '--chart-rsi-width': String(appearance.rsiWidth),
+    '--chart-rsi-signal-color': appearance.rsiSignalColor,
+    '--chart-rsi-signal-width': String(appearance.rsiSignalWidth),
+  };
 
   return (
-    <section className="chart-workspace">
+    <section className="chart-workspace" style={chartStyle}>
       <div className="chart-header">
         <div className="quote-stack">
           <span className="quote-symbol">{stock.market}:{stock.code}</span>
@@ -771,8 +957,48 @@ function TechnicalChart({ stock }) {
         </div>
       </div>
 
+      <details className="chart-settings">
+        <summary><SlidersHorizontal size={15} aria-hidden="true" /> 차트 설정</summary>
+        <div className="style-panel chart-style-panel">
+          <section className="style-section">
+            <h3>캔들</h3>
+            <div className="style-section-grid">
+              <ChartColorRow label="상승" value={appearance.candleUp} onChange={(value) => updateAppearance('candleUp', value)} />
+              <ChartColorRow label="하락" value={appearance.candleDown} onChange={(value) => updateAppearance('candleDown', value)} />
+              <ChartRangeRow label="캔들 폭" value={appearance.candleWidth} min="0.35" max="0.9" step="0.05" unit="배" onChange={(value) => updateAppearance('candleWidth', value)} />
+              <ChartRangeRow label="꼬리 두께" value={appearance.wickWidth} min="0.8" max="3" step="0.1" unit="px" onChange={(value) => updateAppearance('wickWidth', value)} />
+            </div>
+          </section>
+          <section className="style-section">
+            <h3>가격·볼린저</h3>
+            <div className="style-section-grid">
+              <ChartStyleRow label="종가선" color={appearance.closeColor} width={appearance.closeWidth} onColorChange={(value) => updateAppearance('closeColor', value)} onWidthChange={(value) => updateAppearance('closeWidth', value)} />
+              <ChartColorRow label="볼린저 상단" value={appearance.bbUpperColor} onChange={(value) => updateAppearance('bbUpperColor', value)} />
+              <ChartColorRow label="볼린저 하단" value={appearance.bbLowerColor} onChange={(value) => updateAppearance('bbLowerColor', value)} />
+              <ChartRangeRow label="볼린저 선 두께" value={appearance.bbWidth} min="1" max="4" step="0.1" unit="px" onChange={(value) => updateAppearance('bbWidth', value)} />
+              <ChartStyleRow label="볼린저 중심" color={appearance.bbMidColor} width={appearance.bbMidWidth} onColorChange={(value) => updateAppearance('bbMidColor', value)} onWidthChange={(value) => updateAppearance('bbMidWidth', value)} />
+            </div>
+          </section>
+          <section className="style-section">
+            <h3>이동평균</h3>
+            <div className="style-section-grid">
+              <ChartStyleRow label="MA20" color={appearance.ma20Color} width={appearance.ma20Width} onColorChange={(value) => updateAppearance('ma20Color', value)} onWidthChange={(value) => updateAppearance('ma20Width', value)} />
+              <ChartStyleRow label="MA60" color={appearance.ma60Color} width={appearance.ma60Width} onColorChange={(value) => updateAppearance('ma60Color', value)} onWidthChange={(value) => updateAppearance('ma60Width', value)} />
+            </div>
+          </section>
+          <section className="style-section">
+            <h3>RSI</h3>
+            <div className="style-section-grid">
+              <ChartStyleRow label="RSI" color={appearance.rsiColor} width={appearance.rsiWidth} onColorChange={(value) => updateAppearance('rsiColor', value)} onWidthChange={(value) => updateAppearance('rsiWidth', value)} />
+              <ChartStyleRow label="RSI 시그널" color={appearance.rsiSignalColor} width={appearance.rsiSignalWidth} onColorChange={(value) => updateAppearance('rsiSignalColor', value)} onWidthChange={(value) => updateAppearance('rsiSignalWidth', value)} />
+            </div>
+          </section>
+          <button type="button" className="chart-style-reset" onClick={() => setAppearance({ ...DEFAULT_CHART_APPEARANCE })}>기본값으로 되돌리기</button>
+        </div>
+      </details>
+
       <div className="chart-frame">
-        <svg className="technical-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${stock.name} 기술지표 차트`}>
+        <svg className="technical-chart" style={chartStyle} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${stock.name} 기술지표 차트`}>
           <rect x="0" y="0" width={width} height={height} className="chart-bg" />
           {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
             const y = margin.top + ratio * priceHeight;
@@ -834,7 +1060,9 @@ function TechnicalChart({ stock }) {
 
       <div className="legend-strip">
         <span><i className="swatch candle-up" /> 상승 캔들</span>
-        <span><i className="swatch bb" /> 볼린저밴드</span>
+        <span><i className="swatch candle-down" /> 하락 캔들</span>
+        <span><i className="swatch bb-upper" /> 볼린저 상단</span>
+        <span><i className="swatch bb-lower" /> 볼린저 하단</span>
         <span><i className="swatch ma" /> MA20 / MA60</span>
         <span><i className="swatch rsi" /> RSI / 시그널</span>
       </div>
@@ -1046,6 +1274,7 @@ function PublicAnalysisPanel({ stock, compact = false }) {
   const states = Object.entries(stock.indicatorStates || {}).filter(([, state]) => state?.state || (state?.reasons || []).length);
   const supportingReasons = reasons.filter((reason) => !isCautionReason(reason));
   const cautionReasons = reasons.filter(isCautionReason);
+  const freshnessNotice = publicFreshnessNotice(stock.updatedAt);
   const baseId = 'public-analysis-' + String(stock.id || stock.code || 'stock').replace(/[^a-zA-Z0-9_-]/g, '-');
   const sectionId = (suffix) => baseId + '-' + suffix;
   const sections = [
@@ -1061,20 +1290,21 @@ function PublicAnalysisPanel({ stock, compact = false }) {
         <div><p>공공데이터 기반 기술지표 분석</p><h3>{stock.name}</h3><span>{stock.market}:{stock.code} · 확정 일봉 기준 {stock.updatedAt}</span></div>
         <div className="public-status-stack"><strong className="glow-text">{formatNumber(stock.confidence, 1)}점</strong><span className={'risk-chip risk-' + stock.riskState}>{stock.label}</span></div>
       </div>
+      {freshnessNotice && <p className="public-data-freshness" role="status"><AlertTriangle size={16} aria-hidden="true" /><span>{freshnessNotice}</span></p>}
 
       <section id={sectionId('overview')} className="public-analysis-section public-overview-section">
-        <div className="public-section-heading"><span>01 · 종합 해석</span><h4>이 결과를 이렇게 읽어보세요</h4></div>
+        <div className="public-section-heading"><span>01 · 종합 해석</span><h4>먼저 전체 흐름부터 볼까요?</h4></div>
         <div className="public-conclusion"><span>현재 분류</span><p>{publicConclusion(stock)}</p></div>
         <div className="public-reading-grid">
-          <article><span>점수가 말하는 것</span><strong>{formatNumber(stock.confidence, 1)}점 · {stock.label}</strong><p>여러 기술 조건이 같은 방향을 가리키는 정도를 교육용 점수로 묶었습니다. 한 개 지표만으로 결론을 내리지 않습니다.</p></article>
-          <article><span>뒷받침 조건</span><strong>{supportingReasons.length}개</strong><p>추세·변동성·거래량처럼 현재 해석을 지지하는 조건의 수입니다. 아래 근거에서 항목별 의미를 확인할 수 있습니다.</p></article>
-          <article><span>추가 확인 조건</span><strong>{cautionReasons.length}개</strong><p>엇갈리거나 약화될 수 있는 조건입니다. 숫자가 적어도 방향을 단정하지 않고 함께 살펴봐야 합니다.</p></article>
+          <article><span>점수가 말하는 것</span><strong>{formatNumber(stock.confidence, 1)}점 · {stock.label}</strong><p>여러 기술 조건을 정해진 가중치로 묶은 점수예요. 한 지표만 보고 결론을 내리지는 마세요.</p></article>
+          <article><span>뒷받침 조건</span><strong>{supportingReasons.length}개</strong><p>{supportingReasons.length ? '현재 분류를 뒷받침한 조건들이에요. 서로 비슷한 움직임을 반복해 보여 줄 수도 있으니 아래에서 하나씩 읽어 보세요.' : '지금 표시할 뒷받침 조건은 없어요. 점수와 기준일을 함께 확인해 주세요.'}</p></article>
+          <article><span>추가 확인 조건</span><strong>{cautionReasons.length}개</strong><p>{cautionReasons.length ? '현재 해석에 걸리는 조건들이에요. 수가 적어도 아래에서 함께 살펴보세요.' : '현재 분류된 주의 조건은 없어요. 그렇다고 앞으로의 흐름까지 확인된 것은 아닙니다.'}</p></article>
         </div>
         <p className="public-analysis-note">최근 거래일의 확정 일봉을 분석한 결과입니다. 가격·차트·지표 원수치는 공개하지 않고, 분석에 반영된 조건과 해설만 보여드립니다.</p>
       </section>
 
       <section id={sectionId('evidence')} className="public-analysis-section public-evidence-section">
-        <div className="public-section-heading"><span>02 · 반영한 조건</span><h4>뒷받침 조건과 주의 조건을 나눠 확인하세요</h4><p>같은 종목 안에서도 서로 다른 방향의 근거가 함께 존재할 수 있습니다.</p></div>
+        <div className="public-section-heading"><span>02 · 반영한 조건</span><h4>각 신호는 같은 이야기를 할까요?</h4><p>조건이 같은 쪽을 가리킬 때도, 엇갈릴 때도 있어요. 아래에서 나눠 볼게요.</p></div>
         <div className="public-evidence-columns">
           <article className="public-evidence-card supportive"><header><strong>해석을 뒷받침한 조건</strong><span>{supportingReasons.length}개</span></header><div>{supportingReasons.length ? supportingReasons.map((reason) => <span key={reason} onClick={() => setReasonKey(reason)} style={{cursor: 'pointer'}} title="클릭하여 설명 보기" className="clickable-reason">{publicReasonLabel(reason)} <HelpCircle size={11} style={{display:'inline', marginLeft:'2px', opacity:0.6}}/></span>) : <small>현재 공개된 뒷받침 조건이 없습니다.</small>}</div></article>
           <article className="public-evidence-card caution"><header><strong>함께 확인할 조건</strong><span>{cautionReasons.length}개</span></header><div>{cautionReasons.length ? cautionReasons.map((reason) => <span key={reason} onClick={() => setReasonKey(reason)} style={{cursor: 'pointer'}} title="클릭하여 설명 보기" className="clickable-reason">{publicReasonLabel(reason)} <HelpCircle size={11} style={{display:'inline', marginLeft:'2px', opacity:0.6}}/></span>) : <small>현재 뚜렷한 경고 조건이 없습니다.</small>}</div></article>
@@ -1083,7 +1313,7 @@ function PublicAnalysisPanel({ stock, compact = false }) {
       </section>
 
       <section id={sectionId('indicators')} className="public-analysis-section public-state-detail">
-        <div className="public-section-heading"><span>03 · 지표별 상태 해설</span><h4>각 지표를 어떤 조건으로 분류했나요?</h4><p>실제 입력값은 공개하지 않고, 분석 코드가 판정한 상태와 조건 설명만 제공합니다.</p></div>
+        <div className="public-section-heading"><span>03 · 지표별 상태 해설</span><h4>지표별로 다시 살펴볼까요?</h4><p>분석 코드가 분류한 상태와 그 이유를 볼 수 있어요. 원시 입력값은 공개하지 않습니다.</p></div>
         {states.length ? states.map(([key, state]) => {
           const stateReasons = Array.from(new Map((state.reasons || []).filter(Boolean).map((reason) => [publicReasonLabel(reason), reason])).values()).slice(0, 6);
           return (
@@ -1799,11 +2029,7 @@ export default function ResearchApp() {
   useEffect(() => { if (selected && !selected.raw?.hasFullHistory) loadSignalDetail(selected); }, [selected?.id]);
 
   if (!hasLoaded && loading) {
-    return (
-      <main className={`loading-screen ${themeClassMap[theme] || themeClassMap.light}`}>
-        <div className="loading-panel"><RefreshCw size={22} className="spin" /><span>기술지표 데이터를 불러오는 중</span><strong>{BRAND_SHORT}</strong></div>
-      </main>
-    );
+    return <AnalysisLoadingScene themeClass={themeClassMap[theme] || themeClassMap.light} />;
   }
 
   return (
@@ -1836,6 +2062,12 @@ export default function ResearchApp() {
           </div>}
         </div>
         <div className="market-summary"><div><span>조건 강함</span><strong>{summary.strong}</strong></div><div><span>주의 신호</span><strong>{summary.defensive}</strong></div><div><span>{adminViewActive ? '실험 큐' : '표시 종목'}</span><strong>{adminViewActive ? summary.staged : displayedSignals.length}</strong></div></div>
+        {!adminViewActive && selected?.updatedAt && (
+          <div className="public-list-freshness" role="status">
+            <strong>공개 분석 기준일 {selected.updatedAt}</strong>
+            <span>{publicFreshnessNotice(selected.updatedAt) || '최근 거래일이 확정된 비실시간 일봉을 바탕으로 한 학습 자료입니다.'}</span>
+          </div>
+        )}
         <div className="signal-stack">
           {filteredSignals.length === 0 && <div className="empty-watch">조건에 맞는 종목이 없습니다.</div>}
           {displayedSignals.map((signal) => <button key={signal.id} type="button" className={`watch-row ${selected?.id === signal.id ? 'selected' : ''}`} aria-current={selected?.id === signal.id ? 'true' : undefined} onClick={() => selectSignal(signal)}><span className="watch-main"><strong>{signal.name}</strong><span>{signal.market}:{signal.code} · {signal.label}</span></span><span className={`watch-score score-${signal.riskState}`}>{formatNumber(signal.confidence, 1)}</span></button>)}
@@ -1863,6 +2095,7 @@ export default function ResearchApp() {
         {workspaceView === 'executions' && adminViewActive && <div className="execution-page"><PortfolioSnapshot portfolio={portfolio} onRefresh={requestPaperAccountRefresh} refreshBusy={paperRefreshBusy} refreshMessage={paperAccountMessage} canRefresh={Boolean(adminViewActive && firebaseReady && db)} /><RuntimeMonitorPanel runtime={runtimeMonitor} /><PrivatePerformancePanel performance={privatePerformance} /><TradeLogPanel logs={tradeLogs} /><OrdersPanel orders={orders} /></div>}
 
       </section>
+      {!adminViewActive && <AnalysisEducationGuide />}
       {showDisclaimerModal && <DisclaimerModal onClose={() => setShowDisclaimerModal(false)} />}
     {!user && <ComplianceDock />}
     </main>

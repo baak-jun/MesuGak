@@ -8,19 +8,32 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from jobs.enforce_analysis_retention import MAX_RETENTION_STOCKS, resolve_limit, select_stale_snapshots
-from jobs.analyze_market import MAX_DAILY_STOCKS, _prune_local_payloads, select_top_summaries, validate_stock_limit
+from jobs.analyze_market import (
+    MAX_DAILY_STOCKS,
+    MAX_STORAGE_STOCKS,
+    _prune_local_payloads,
+    resolve_storage_limit,
+    select_top_summaries,
+    validate_stock_limit,
+)
 from jobs.delete_analysis_market import ANALYSIS_COLLECTIONS, _matches, resolve_collections
 from strategy_engine.market_data import MarketTarget
 
 
 class AnalysisRetentionTests(unittest.TestCase):
     def test_limit_is_bounded(self):
-        self.assertEqual(resolve_limit(1000), MAX_RETENTION_STOCKS)
+        self.assertEqual(resolve_limit(MAX_RETENTION_STOCKS), MAX_RETENTION_STOCKS)
         with self.assertRaises(ValueError):
-            resolve_limit(1001)
-        self.assertEqual(validate_stock_limit(MAX_DAILY_STOCKS), MAX_DAILY_STOCKS)
+            resolve_limit(MAX_RETENTION_STOCKS + 1)
+        self.assertEqual(MAX_DAILY_STOCKS, 1000)
+        self.assertEqual(validate_stock_limit(MAX_STORAGE_STOCKS), MAX_STORAGE_STOCKS)
         with self.assertRaises(ValueError):
-            validate_stock_limit(MAX_DAILY_STOCKS + 1)
+            validate_stock_limit(MAX_STORAGE_STOCKS + 1)
+        with patch.dict("os.environ", {}, clear=True):
+            self.assertEqual(resolve_storage_limit(None), MAX_STORAGE_STOCKS)
+        with patch.dict("os.environ", {"MESUGAK_MAX_STOCKS": str(MAX_STORAGE_STOCKS + 1)}):
+            with self.assertRaises(ValueError):
+                resolve_storage_limit(None)
 
     def test_only_market_documents_outside_keep_set_are_stale(self):
         def snap(doc_id, market=None):
@@ -64,7 +77,7 @@ class AnalysisRetentionTests(unittest.TestCase):
             self.assertTrue((directory / "KR_KEEP.json.gz").exists())
             self.assertFalse((directory / "KR_DROP.json.gz").exists())
 
-    def test_local_ranked_run_does_not_initialize_firestore_and_stores_cap(self):
+    def test_large_universe_is_fully_analyzed_locally_and_stores_only_cap(self):
         from jobs import analyze_market
 
         targets = [
@@ -87,7 +100,7 @@ class AnalysisRetentionTests(unittest.TestCase):
              patch.object(analyze_market, "init_firestore", side_effect=AssertionError("Firestore must stay lazy")):
             args = SimpleNamespace(
                 market="KR", codes=None, kr_markets="KOSPI", max_stocks=1, candidate_limit=None,
-                analyze_all_local=True, local_payload_dir=str(Path(root) / "payloads"),
+                analyze_all_local=False, local_payload_dir=str(Path(root) / "payloads"),
                 keep_file=str(Path(root) / "keep.json"), cred_path=None,
                 checkpoint_dir=str(Path(root) / "checkpoints"), reset_checkpoint=True,
                 meta_chunk_size=400, progress_interval=10, history_limit=130,
@@ -97,6 +110,27 @@ class AnalysisRetentionTests(unittest.TestCase):
         self.assertEqual(result["candidateCount"], 2)
         self.assertEqual(result["storedCount"], 1)
         self.assertEqual(result["selection"], "confidenceScore desc, marcap desc, code asc")
+
+    def test_server_only_scan_publishes_full_snapshot_without_cloud_or_capped_keep_file(self):
+        import json
+        from jobs import analyze_market
+        targets = [MarketTarget('000001', 'A'), MarketTarget('000002', 'B')]
+        with tempfile.TemporaryDirectory() as root, \
+             patch.object(analyze_market, 'load_market_universe', return_value=targets), \
+             patch.object(analyze_market, 'load_ohlcv_with_public_data', return_value=object()), \
+             patch.object(analyze_market, 'analyze_stock', side_effect=lambda df, identity, **kw: {'id': identity.doc_id, 'code': identity.code, 'market': 'KR', 'confidenceScore': 60}), \
+             patch.object(analyze_market, 'to_summary', side_effect=dict), \
+             patch.object(analyze_market, 'init_firestore', side_effect=AssertionError('No Firebase access')):
+            args = SimpleNamespace(market='KR', codes=None, kr_markets='KOSPI', max_stocks=1, candidate_limit=None,
+                server_only=True, analyze_all_local=True, keep_file=str(Path(root) / 'output' / 'keep.json'),
+                checkpoint_dir=str(Path(root) / 'checkpoints'), reset_checkpoint=False,
+                progress_interval=10, history_limit=130, dry_run=False)
+            result = analyze_market.run(args)
+            snapshot = json.loads((Path(root) / 'output' / 'realtime_candidates_KR.json').read_text())
+            self.assertEqual(len(snapshot['summaries']), 2)
+            self.assertEqual(snapshot['source'], 'contest_premarket')
+            self.assertFalse((Path(root) / 'output' / 'keep.json').exists())
+            self.assertEqual(result['storedCount'], 2)
 
 
 if __name__ == "__main__":

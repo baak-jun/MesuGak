@@ -91,6 +91,22 @@ class PublicDataWatchTests(unittest.TestCase):
         run.assert_not_called()
         self.assertEqual(state["status"], "unchanged")
 
+    def test_late_evening_probe_still_runs_before_watch_window_closes(self):
+        now = dt.datetime(2026, 9, 10, 23, 57, tzinfo=dt.timezone(dt.timedelta(hours=9)))
+        with tempfile.TemporaryDirectory() as tmp, patch("jobs.watch_public_data.subprocess.run") as run:
+            run.return_value.returncode = 0
+            marker = Path(tmp) / "watch.json"
+            result = poll_once(
+                root=Path(tmp),
+                marker_path=marker,
+                runner_path=Path(tmp) / "run.sh",
+                client=_FakeDateClient(dt.date(2026, 9, 10)),
+                now=now,
+            )
+
+        self.assertEqual(result, 0)
+        run.assert_called_once()
+
     def test_new_date_runs_once_and_records_success(self):
         now = dt.datetime(2026, 9, 10, 13, 3, tzinfo=dt.timezone(dt.timedelta(hours=9)))
         with tempfile.TemporaryDirectory() as tmp, patch("jobs.watch_public_data.subprocess.run") as run:

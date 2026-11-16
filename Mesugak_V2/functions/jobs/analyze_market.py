@@ -23,9 +23,11 @@ from strategy_engine.analysis import StockIdentity, analyze_stock, to_summary
 from strategy_engine.checkpoints import LocalCheckpointManager, MemoryCheckpointManager, resolve_checkpoint_path
 from strategy_engine.market_data import load_market_universe, load_ohlcv_with_public_data, targets_from_codes
 from strategy_engine.repositories import FirestoreStrategyRepository, init_firestore
+from strategy_engine.untradable import DEFAULT_UNTRADABLE_PATH, load_untradable_codes, prune_candidate_snapshot
 
 
 MAX_DAILY_STOCKS = 1000
+MAX_STORAGE_STOCKS = 200
 MAX_LOCAL_CANDIDATES = 5000
 LOCAL_ANALYSIS_MODE = "local_ranked_v1"
 
@@ -37,9 +39,9 @@ def validate_stock_limit(value: int | None) -> int | None:
     value = int(value)
     if value < 1:
         raise ValueError("--max-stocks must be at least 1")
-    if value > MAX_DAILY_STOCKS:
+    if value > MAX_STORAGE_STOCKS:
         raise ValueError(
-            f"Daily analysis is limited to {MAX_DAILY_STOCKS} stocks; reduce --max-stocks before running"
+            f"Firebase persistence is limited to {MAX_STORAGE_STOCKS} stocks; reduce --max-stocks before running"
         )
     return value
 
@@ -47,10 +49,10 @@ def validate_stock_limit(value: int | None) -> int | None:
 def resolve_storage_limit(value: int | None) -> int:
     """Resolve the Firebase persistence cap without widening it implicitly."""
     if value is None:
-        value = int(os.getenv("MESUGAK_MAX_STOCKS", str(MAX_DAILY_STOCKS)))
+        value = int(os.getenv("MESUGAK_MAX_STOCKS", str(MAX_STORAGE_STOCKS)))
     result = validate_stock_limit(value)
     if result is None:
-        return MAX_DAILY_STOCKS
+        return MAX_STORAGE_STOCKS
     return result
 
 
@@ -150,7 +152,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--market", default="KR")
     parser.add_argument("--codes", default=None, help="Comma-separated stock codes. If omitted, loads the full market universe.")
     parser.add_argument("--kr-markets", default="KOSPI,KOSDAQ", help="Comma-separated KR submarkets for universe mode")
-    parser.add_argument("--max-stocks", type=int, default=None, help="Maximum number of ranked results stored in Firebase")
+    parser.add_argument(
+        "--max-stocks",
+        type=int,
+        default=None,
+        help=f"Maximum number of ranked results stored in Firebase (hard cap: {MAX_STORAGE_STOCKS})",
+    )
     parser.add_argument("--candidate-limit", type=int, default=None, help="Optional limit before local analysis")
     parser.add_argument(
         "--analyze-all-local",
@@ -158,8 +165,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Analyse the full public-data universe locally, then persist only the ranked cap",
     )
     parser.add_argument("--local-payload-dir", default=None, help="Directory for server-only compressed analysis payloads")
+    parser.add_argument("--server-only", action="store_true", help="Publish the full contest candidate snapshot locally without any Firebase access")
     parser.add_argument("--keep-file", default=None, help="JSON file containing the selected Firebase document IDs")
     parser.add_argument("--cred-path", default=None)
+    parser.add_argument('--untradable-file', default=os.getenv('MESUGAK_UNTRADABLE_FILE', str(DEFAULT_UNTRADABLE_PATH)))
     parser.add_argument("--checkpoint-dir", default=None)
     parser.add_argument("--reset-checkpoint", action="store_true")
     parser.add_argument("--meta-chunk-size", type=int, default=400)
@@ -194,9 +203,6 @@ def _load_targets(args: argparse.Namespace, market: str):
     candidate_limit = getattr(args, "candidate_limit", None)
     if getattr(args, "analyze_all_local", False):
         candidate_limit = None
-    elif candidate_limit is None:
-        # Preserve the old direct-call behaviour for paper-flow callers.
-        candidate_limit = getattr(args, "max_stocks", None)
     if args.codes:
         targets = targets_from_codes(_parse_csv(args.codes))
     else:
@@ -207,7 +213,8 @@ def _load_targets(args: argparse.Namespace, market: str):
         )
     if args.codes and candidate_limit is not None and candidate_limit > 0:
         targets = targets[:candidate_limit]
-    return targets
+    excluded = load_untradable_codes(getattr(args, 'untradable_file', DEFAULT_UNTRADABLE_PATH))
+    return [target for target in targets if target.code not in excluded]
 
 
 def _save_meta_chunks(
@@ -293,8 +300,14 @@ def run(args: argparse.Namespace) -> dict:
     if market != "KR":
         raise ValueError("Financial Services Commission public analysis supports KR only")
     storage_limit = resolve_storage_limit(getattr(args, "max_stocks", None))
-    local_ranked = bool(getattr(args, "analyze_all_local", False))
+    server_only = bool(getattr(args, "server_only", False))
+    local_ranked = server_only or bool(getattr(args, "analyze_all_local", False))
     targets = _load_targets(args, market)
+    # max-stocks limits Firebase persistence, never the number of candidates
+    # analyzed. Switch to the local ranked flow whenever storing every result
+    # could exceed the persistence cap.
+    if len(targets) > storage_limit:
+        local_ranked = True
     if len(targets) > (MAX_LOCAL_CANDIDATES if local_ranked else MAX_DAILY_STOCKS):
         raise ValueError(
             f"Local candidate analysis is limited to {MAX_LOCAL_CANDIDATES} stocks"
@@ -331,7 +344,10 @@ def run(args: argparse.Namespace) -> dict:
     skipped_count = initial_done_count
     started_at = time.monotonic()
     progress_interval = max(1, int(args.progress_interval or 10))
-    write_batch_size = 40
+    try:
+        write_batch_size = max(1, int(os.getenv("MESUGAK_ANALYSIS_WRITE_BATCH_SIZE", "20")))
+    except ValueError:
+        write_batch_size = 20
     local_payload_dir = _local_payload_dir(args, market) if local_ranked else None
     batch_buffer: list[tuple[str, dict]] = []
 
@@ -374,7 +390,7 @@ def run(args: argparse.Namespace) -> dict:
                     continue
                 summary = to_summary(payload)
                 summaries.append(summary)
-                if local_ranked:
+                if local_ranked and not server_only:
                     _write_local_payload(local_payload_dir, payload)
                 elif repo:
                     batch_buffer.append((payload["id"], payload))
@@ -401,9 +417,14 @@ def run(args: argparse.Namespace) -> dict:
                             current_name=target.name,
                         )
         flush_batch()
+        failures = checkpoint.snapshot().get('failedCodes', [])
+        excluded = load_untradable_codes(getattr(args, 'untradable_file', DEFAULT_UNTRADABLE_PATH))
+        summaries = [item for item in summaries if str(item.get('code')) not in excluded]
         selected_summaries = select_top_summaries(summaries, storage_limit) if local_ranked else list(summaries)
         selected_payloads: list[tuple[str, dict[str, Any]]] = []
-        if local_ranked:
+        if local_ranked and not selected_summaries:
+            raise RuntimeError("No successful local analyses; retaining the previous candidate snapshot")
+        if local_ranked and not server_only:
             if not selected_summaries:
                 raise RuntimeError("No successful local analyses are available for Firebase persistence")
             for summary in selected_summaries:
@@ -448,6 +469,14 @@ def run(args: argparse.Namespace) -> dict:
                 cleanup_summary = repo.cleanup_past_data(market=market, retention_days=retention_days)
                 print(f"[retention] cleanup finished: {cleanup_summary}", flush=True)
         checkpoint.mark_done()
+        if local_ranked and not getattr(args, "dry_run", False):
+            # Keep the full scored universe on the server; Firebase retains only its existing cap.
+            candidate_path = _keep_file_path(args, market).parent / f"realtime_candidates_{market}.json"
+            temporary = candidate_path.with_suffix(".tmp")
+            candidate_path.parent.mkdir(parents=True, exist_ok=True)
+            temporary.write_text(json.dumps({"market": market, "runDate": datetime.now().date().isoformat(), "completedAt": datetime.now().isoformat(timespec="seconds"), "source": "contest_premarket" if server_only else "public_analysis", "targetCount": len(targets), "failureCount": len(failures), "summaries": checkpoint.summaries()}, ensure_ascii=False, default=str), encoding="utf-8")
+            temporary.replace(candidate_path)
+            prune_candidate_snapshot(candidate_path, load_untradable_codes(getattr(args, 'untradable_file', DEFAULT_UNTRADABLE_PATH)))
         _print_progress(
             market=market,
             processed=len(targets),

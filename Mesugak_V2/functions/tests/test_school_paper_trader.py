@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 FUNCTIONS_DIR = Path(__file__).resolve().parents[1]
 JOBS_DIR = FUNCTIONS_DIR / "jobs"
@@ -11,7 +14,13 @@ for path in (FUNCTIONS_DIR, JOBS_DIR):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from school_paper_trader import choose_live_candidates, fetch_live_prices, process_paper_refresh_requests, run  # noqa: E402
+from school_paper_trader import (  # noqa: E402
+    choose_live_candidates,
+    fetch_live_prices,
+    load_server_env,
+    process_paper_refresh_requests,
+    run,
+)
 
 
 class FakeClient:
@@ -74,6 +83,17 @@ class FakeRepo:
 
 
 class SchoolPaperTraderTests(unittest.TestCase):
+    def test_custom_env_file_overrides_server_defaults(self) -> None:
+        with tempfile.NamedTemporaryFile("w", suffix=".env", delete=False, encoding="utf-8") as handle:
+            handle.write("MESUGAK_TEST_CUSTOM_ENV=contest\n")
+            env_path = handle.name
+        try:
+            with patch.dict(os.environ, {"MESUGAK_TEST_CUSTOM_ENV": "server"}):
+                load_server_env(env_path)
+                self.assertEqual(os.environ["MESUGAK_TEST_CUSTOM_ENV"], "contest")
+        finally:
+            Path(env_path).unlink(missing_ok=True)
+
     def test_fetch_live_prices_skips_failed_quote(self) -> None:
         prices, errors = fetch_live_prices(FakeClient({"AAA": 100.0}, {"BAD"}), ["AAA", "BAD"])
 

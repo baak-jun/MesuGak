@@ -109,10 +109,9 @@ export function openConsentSettings() {
     googlefc.showRevocationMessage();
     return Promise.resolve(true);
   }
-  // Do not leave a dead-looking button waiting for a CMP that is not present.
-  // The production build keeps Analytics and AdSense disabled until the real
-  // Google-certified CMP snippet is installed.
-  if (!document.querySelector('script[src*="fundingchoicesmessages.google.com"]')) {
+  // The Google CMP message is loaded by the account's AdSense publisher tag.
+  // Wait briefly if the user opens settings before that tag finishes loading.
+  if (!document.querySelector('script[src*="fundingchoicesmessages.google.com"], script[src^="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"]')) {
     return Promise.resolve(false);
   }
   return new Promise((resolve) => {

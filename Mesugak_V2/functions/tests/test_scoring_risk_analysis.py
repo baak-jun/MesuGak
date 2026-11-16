@@ -12,7 +12,14 @@ if str(FUNCTIONS_DIR) not in sys.path:
 
 from strategy_engine.analysis import StockIdentity, analyze_stock, to_public_summary, to_summary  # noqa: E402
 from strategy_engine.risk import evaluate_risk  # noqa: E402
-from strategy_engine.scoring import classify_bollinger_state, classify_ma_support_state, score_latest  # noqa: E402
+from strategy_engine.scoring import (
+    classify_bollinger_state,
+    classify_ma_support_state,
+    classify_volume_state,
+    classify_rsi_state,
+    classify_ichimoku_state,
+    score_latest,
+)  # noqa: E402
 
 
 def scoring_rows(overrides: dict | None = None) -> pd.DataFrame:
@@ -227,6 +234,69 @@ class ScoringRiskAnalysisTests(unittest.TestCase):
         result = score_latest(scoring_rows({"senkou_a": pd.NA, "senkou_b": pd.NA, "rsi": pd.NA}))
 
         self.assertIsInstance(result.confidence_score, float)
+
+    def test_case_lesson_examples_match_v2_scoring_and_history_rules(self) -> None:
+        breakout_rows = []
+        for index in range(25):
+            width = 0.04 if index < 23 else 0.045 if index == 23 else 0.061
+            is_latest = index == 24
+            breakout_rows.append(
+                {
+                    "close": 100.8 if is_latest else 99.0,
+                    "high": 101.0,
+                    "bb_upper": 100.0,
+                    "bb_lower": 94.08 if is_latest else 94.0,
+                    "bb_mid": 97.04 if is_latest else 97.0,
+                    "bb_bandwidth": width,
+                    "bb_percent_b": 1.1 if is_latest else 0.5,
+                    "relative_volume": 0.8,
+                }
+            )
+        breakout = pd.DataFrame(breakout_rows)
+        bollinger = classify_bollinger_state(breakout)
+        volume = classify_volume_state(breakout, bollinger)
+        self.assertEqual((bollinger["state"], bollinger["score"]), ("SQUEEZE_RELEASE_UP", 90.0))
+        self.assertEqual((volume["state"], volume["score"]), ("SQUEEZE_RELEASE_WEAK_VOLUME", -20.0))
+
+        ma_support = classify_ma_support_state(
+            pd.DataFrame(
+                [
+                    {"close": 100.0, "bb_lower": 100.4, "ma60": 100.2},
+                    {"close": 101.0, "bb_lower": 98.8, "ma60": 100.0},
+                ]
+            )
+        )
+        self.assertEqual((ma_support["state"], ma_support["score"]), ("LOWER_BAND_CROSS_BELOW_MA60", -35.0))
+
+        rsi_recovery = classify_rsi_state(
+            pd.DataFrame(
+                {
+                    "rsi": [25, 28, 34],
+                    "rsi_signal": [25, 30, 31],
+                    "close": [90, 91, 92],
+                }
+            )
+        )
+        self.assertEqual(rsi_recovery["score"], 35.0)
+
+        cloud_rows = [
+            {
+                "close": 92.0,
+                "senkou_a": 100.0,
+                "senkou_b": 97.0,
+                "senkou_a_leading": 98.0,
+                "senkou_b_leading": 98.0,
+                "tenkan": 98.0,
+                "kijun": 98.0,
+            }
+            for _ in range(27)
+        ]
+        cloud_state = classify_ichimoku_state(pd.DataFrame(cloud_rows))
+        self.assertEqual(cloud_state["score"], -35.0)
+
+        identity = StockIdentity(market="KR", code="000001", name="Fictional")
+        self.assertIsNone(analyze_stock(analysis_ohlcv(119), identity))
+        self.assertIsNotNone(analyze_stock(analysis_ohlcv(120), identity))
 
     def test_evaluate_risk_detects_defensive_conditions(self) -> None:
         df = scoring_rows(

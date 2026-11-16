@@ -42,6 +42,6 @@
 - 사용자·계좌·거래 기록은 이번 재생성 가능 데이터 삭제 범위에 포함하지 않는다.
 - 후속 자동화는 저장량 반영과 다음 정상 분석을 확인한 뒤 종료하도록 갱신했다. 실제 일회성 청구액은 결제 보고서 반영 전이므로 미확정이다.
 
-서버 기준 위치: /home/2023112374/mesugak/repo/Mesugak_V2
+서버 기준 위치: /home/YOUR_SCHOOL_ID/mesugak/repo/Mesugak_V2
 
 관측 파일: runtime/cost/maintenance.log, runtime/cost/status.json, runtime/cost/candidates-drained, runtime/cost/analysis-compacted. 백업 위치: runtime/cloud-archives. 실제 장 마감 분석의 재개는 저장·요청량 차단 조건을 통과해야 한다.

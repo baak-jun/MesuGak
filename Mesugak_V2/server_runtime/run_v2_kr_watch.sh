@@ -28,6 +28,6 @@ exec "$PYTHON_BIN" "$ROOT/functions/jobs/watch_public_data.py" \
   --runner "$ROOT/server_runtime/run_v2_kr_close.sh" \
   --marker "$ROOT/runtime/watch/public_data_KR.json" \
   --start-hour "${MESUGAK_PUBLIC_DATA_WATCH_START_HOUR:-13}" \
-  --end-hour "${MESUGAK_PUBLIC_DATA_WATCH_END_HOUR:-20}" \
+  --end-hour "${MESUGAK_PUBLIC_DATA_WATCH_END_HOUR:-23}" \
   --max-age-days "${MESUGAK_PUBLIC_DATA_MAX_AGE_DAYS:-14}" \
   --retry-minutes "${MESUGAK_PUBLIC_DATA_RETRY_MINUTES:-30}"

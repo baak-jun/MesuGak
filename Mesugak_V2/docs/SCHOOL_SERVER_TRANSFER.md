@@ -1,5 +1,7 @@
 # 학교 서버 이관 목록
 
+> 과거 이관 기록입니다. 실제 현재 경로는 `~/mesugak/repo/Mesugak_V2`이며, 접속·파일 구조·크론은 [현재 학교 서버 운영 문서](operations/SCHOOL_SERVER.md)를 우선 참고하세요.
+
 로컬에서 검증된 V2 국내 분석과 Gmail 감시를 학교 서버에 반영할 때의
 파일 배치입니다. 기준 서버 루트는 `~/mesugak/v2`입니다.
 
@@ -76,7 +78,7 @@ Mesugak_V2/server_runtime/run_v2_health_monitor.sh
 ```dotenv
 DATA_GO_KR_SERVICE_KEY=원본_Decoding_인증키
 MESUGAK_GMAIL_USER=발신용_Gmail
-MESUGAK_GMAIL_APP_PASSWORD=Gmail_앱_비밀번호
+MESUGAK_GMAIL_APP_PASSWORD=__SET_IN_PROTECTED_ENV__
 MESUGAK_ALERT_EMAIL_TO=수신용_이메일
 ```
 
@@ -102,12 +104,12 @@ venv/bin/python functions/jobs/analyze_market.py --market KR --codes 005930 --dr
 ## 5. 권장 cron
 
 ```cron
-*/3 13-20 * * 1-5 /usr/bin/flock -n /tmp/mesugak-v2-watch.lock /home/USER/mesugak/repo/Mesugak_V2/server_runtime/run_v2_kr_watch.sh >> /home/USER/mesugak/repo/Mesugak_V2/runtime/cron/v2_kr_watch.log 2>&1
+*/3 13-23 * * 1-5 /usr/bin/flock -n /tmp/mesugak-v2-watch.lock /home/USER/mesugak/repo/Mesugak_V2/server_runtime/run_v2_kr_watch.sh >> /home/USER/mesugak/repo/Mesugak_V2/runtime/cron/v2_kr_watch.log 2>&1
 */30 * * * * /usr/bin/flock -n /tmp/mesugak-v2-health.lock /home/USER/mesugak/repo/Mesugak_V2/server_runtime/run_v2_health_monitor.sh || true
 ```
 
 `run_v2_kr_watch.sh` probes the public API every three minutes from 13:00
-through 20:59 KST on weekdays. It never touches Firestore while polling and
+through 23:59 KST on weekdays. It never touches Firestore while polling and
 starts `run_v2_kr_close.sh` only when a newer `basDt` is found. The local
 `runtime/watch/public_data_KR.json` marker prevents duplicate daily runs; a
 failed run is retried after a 30-minute cooldown. Holidays naturally produce
@@ -126,3 +128,10 @@ invoking the runner until the next quota day.
 `금융위원회_지수시세정보` 활용신청을 별도로 승인받은 뒤 서버에서 다시 확인해야
 합니다. 지수 API가 당장 없어도 개별 종목 기술적 분석과 공개 게시 자체는
 주식시세 API로 실행할 수 있습니다.
+## 복사 후 읽기 전용 검증
+
+파일을 복사한 뒤에는 `server_runtime/verify_v2_release.sh`를 실행해
+runner 파일 해시, 비밀값을 출력하지 않는 환경변수 존재 여부, watcher marker,
+cron 등록을 한 번에 확인한다. 이 검사는 API·Firestore를 호출하지 않으며,
+`VERIFY_V2_RELEASE_OK`가 나와도 실제 최신 거래일 갱신은 다음 watcher 실행으로
+별도 확인해야 한다.

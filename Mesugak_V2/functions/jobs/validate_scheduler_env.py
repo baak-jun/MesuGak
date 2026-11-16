@@ -14,7 +14,7 @@ ENV_DEFAULTS = {
     "MESUGAK_MARKET": "KR",
     "MESUGAK_CODES": "",
     "MESUGAK_KR_MARKETS": "KOSPI,KOSDAQ",
-    "MESUGAK_MAX_STOCKS": "300",
+    "MESUGAK_MAX_STOCKS": "200",
     "MESUGAK_MAX_POSITIONS": "5",
     "MESUGAK_MIN_CONFIDENCE": "65.0",
     "MESUGAK_MAX_POSITION_WEIGHT": "0.25",
@@ -31,6 +31,7 @@ ENV_DEFAULTS = {
 INT_KEYS = {"MESUGAK_MAX_STOCKS", "MESUGAK_MAX_POSITIONS", "MESUGAK_META_CHUNK_SIZE", "MESUGAK_PROGRESS_INTERVAL"}
 FLOAT_KEYS = {"MESUGAK_MIN_CONFIDENCE", "MESUGAK_MAX_POSITION_WEIGHT", "MESUGAK_ACCOUNT_VALUE", "MESUGAK_INITIAL_CASH"}
 BOOL_KEYS = {"MESUGAK_DRY_RUN", "MESUGAK_SKIP_ANALYSIS", "MESUGAK_SKIP_REBALANCE", "MESUGAK_SKIP_APPLY"}
+MAX_SAVED_STOCKS = 200
 
 
 def load_env(path: str | None = None) -> dict[str, str]:
@@ -53,7 +54,10 @@ def validate_env(values: dict[str, str]) -> list[str]:
     errors: list[str] = []
     for key in INT_KEYS:
         try:
-            if int(values.get(key, "")) < 0:
+            parsed = int(values.get(key, ""))
+            if key == "MESUGAK_MAX_STOCKS" and not 1 <= parsed <= MAX_SAVED_STOCKS:
+                errors.append(f"{key} must be between 1 and {MAX_SAVED_STOCKS}")
+            elif parsed < 0:
                 errors.append(f"{key} must be non-negative")
         except ValueError:
             errors.append(f"{key} must be an integer")

@@ -50,7 +50,7 @@ set +e
   "$PYTHON_BIN" "$ROOT/functions/jobs/analyze_market.py" "${args[@]}"
   "$PYTHON_BIN" "$ROOT/functions/jobs/enforce_analysis_retention.py" \
     --market KR \
-    --max-stocks "${MESUGAK_MAX_STOCKS:-1000}" \
+    --max-stocks "${MESUGAK_MAX_STOCKS:-200}" \
     --keep-file "$ROOT/runtime/checkpoints/analysis_keep_KR.json" \
     --skip-archive \
     --root "$ROOT/runtime"

@@ -35,8 +35,8 @@
 
 ## 학교 서버
 
-- 실제 체크아웃: `/home/2023112374/mesugak/repo/Mesugak_V2`
-- 실행 Python: `/home/2023112374/micromamba-root/envs/py312/bin/python`
+- 실제 체크아웃: `/home/YOUR_SCHOOL_ID/mesugak/repo/Mesugak_V2`
+- 실행 Python: `/home/YOUR_SCHOOL_ID/micromamba-root/envs/py312/bin/python`
 - 등록된 cron: KR 장 마감 분석, 30분 헬스 모니터, 평일 모의계좌 refresh,
   매일 17:05 저장 유지보수.
 - `run_v2_kr_close.sh`는 오류 시 Gmail 알림을 호출하고, 헬스 모니터는

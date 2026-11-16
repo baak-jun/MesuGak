@@ -3,3 +3,5 @@ numpy
 firebase-admin
 firebase-functions
 python-dotenv
+websockets
+cryptography

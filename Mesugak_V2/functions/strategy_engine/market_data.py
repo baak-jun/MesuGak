@@ -319,7 +319,7 @@ def load_market_universe(
     for row in rows:
         exchange = str(row.get("mrktCtg") or "").upper().strip()
         code = str(row.get("srtnCd") or "").strip()
-        if exchange not in wanted or len(code) != 6 or not code.isdigit():
+        if exchange not in wanted or len(code) != 6 or not code.isascii() or not code.isalnum():
             continue
         raw_marcap = pd.to_numeric(row.get("mrktTotAmt"), errors="coerce")
         targets.append(

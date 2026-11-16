@@ -32,6 +32,12 @@ class SchedulerEnvTests(unittest.TestCase):
         self.assertIn("MESUGAK_DRY_RUN must be boolean-like", errors)
         self.assertIn("MESUGAK_MAX_POSITION_WEIGHT must be <= 1", errors)
 
+    def test_saved_stock_limit_is_capped_at_200(self) -> None:
+        values = load_env(str(ENV_EXAMPLE))
+        values["MESUGAK_MAX_STOCKS"] = "201"
+
+        self.assertIn("MESUGAK_MAX_STOCKS must be between 1 and 200", validate_env(values))
+
 
 if __name__ == "__main__":
     unittest.main()

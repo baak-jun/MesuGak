@@ -3,7 +3,7 @@
 ## Persistent Project Workflow
 
 For MesuGak planning and implementation, read the personal skill at
-`C:/Users/baak_jun/.codex/skills/mesugak-project-workflow/SKILL.md` when available.
+`C:/Users/local-user/.codex/skills/mesugak-project-workflow/SKILL.md` when available.
 It captures established cost, data, learning-content, and responsive-UI decisions.
 Use `Mesugak_V2/docs/PROJECT_EXECUTION_PLAN.md` for the current execution boundary.
 The user's newest request overrides historical plans; the skill grants no extra

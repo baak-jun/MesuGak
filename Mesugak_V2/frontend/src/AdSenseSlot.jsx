@@ -1,57 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { monetizationGate } from './monetizationGate';
+import { loadAdSenseScript } from './adsenseClient.js';
 
 const gate = monetizationGate(import.meta.env);
-const scriptSelector = 'script[data-mesugak-adsense="loader"]';
-
-function loadAdSenseScript() {
-  const existing = document.querySelector(scriptSelector);
-  if (existing?.dataset.loaded === 'true') return Promise.resolve();
-  if (existing?.dataset.loading === 'true') {
-    return new Promise((resolve, reject) => {
-      existing.addEventListener('load', resolve, { once: true });
-      existing.addEventListener('error', reject, { once: true });
-    });
-  }
-
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.async = true;
-    script.crossOrigin = 'anonymous';
-    script.dataset.mesugakAdsense = 'loader';
-    script.dataset.loading = 'true';
-    script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(gate.clientId)}`;
-    script.addEventListener('load', () => {
-      script.dataset.loaded = 'true';
-      delete script.dataset.loading;
-      resolve();
-    }, { once: true });
-    script.addEventListener('error', reject, { once: true });
-    document.head.appendChild(script);
-  });
-}
-
-function waitForConsentData() {
-  if (typeof window === 'undefined') return Promise.resolve(false);
-  window.googlefc = window.googlefc || {};
-  window.googlefc.callbackQueue = window.googlefc.callbackQueue || [];
-  if (typeof window.googlefc.getGoogleConsentModeValues === 'function') return Promise.resolve(true);
-
-  return new Promise((resolve) => {
-    let settled = false;
-    let timeoutId;
-    const settle = (ready) => {
-      if (settled) return;
-      settled = true;
-      if (timeoutId) window.clearTimeout(timeoutId);
-      resolve(ready);
-    };
-    window.googlefc.callbackQueue.push({
-      CONSENT_MODE_DATA_READY: () => settle(true),
-    });
-    timeoutId = window.setTimeout(() => settle(false), 5000);
-  });
-}
 
 export function AdSenseSlot({ title = '광고', placement = 'body', compact = false, className = '' }) {
   const elementRef = useRef(null);
@@ -64,20 +15,19 @@ export function AdSenseSlot({ title = '광고', placement = 'body', compact = fa
     let cancelled = false;
     if (!supportedPlacement || !placementEnabled || !gate.adsensePlacementApproved || requestedRef.current) return undefined;
 
-    void waitForConsentData().then((consentReady) => {
-      if (!consentReady) return null;
-      return loadAdSenseScript().then(() => {
-        if (cancelled || requestedRef.current || !elementRef.current) return;
-        requestedRef.current = true;
-        try {
-          window.adsbygoogle = window.adsbygoogle || [];
-          window.adsbygoogle.push({});
-        } catch {
-          // Google can reject a request for account, fill, or policy reasons.
-          // Keep the page usable and rely on the AdSense console for diagnostics.
-        }
-        return null;
-      });
+    void loadAdSenseScript(gate.clientId).then(() => {
+      if (cancelled || requestedRef.current || !elementRef.current) return;
+      requestedRef.current = true;
+      try {
+        // Google CMP is loaded by the publisher tag and applies the visitor's
+        // regional consent to ad serving. Waiting for the separate Consent
+        // Mode API here can suppress every ad in regions without that API.
+        window.adsbygoogle = window.adsbygoogle || [];
+        window.adsbygoogle.push({});
+      } catch {
+        // Google can reject a request for account, fill, or policy reasons.
+        // Keep the page usable and rely on the AdSense console for diagnostics.
+      }
     }).catch(() => {
       // Network/CSP failures must not expose a substitute or encourage clicks.
     });

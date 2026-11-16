@@ -33,14 +33,15 @@ Hosting-only releases are allowed after the frontend checks pass.
 7. Daily analysis skips the full-collection retention scan by default. Enable
    `MESUGAK_ENABLE_RETENTION_CLEANUP=true` only for a deliberate maintenance
    run, because cleanup reads and deletes are billable operations.
-8. The KR analysis and retention jobs now share a hard 1,000-symbol cap. The
+8. The KR analysis and retention jobs now share a hard 200-symbol persistence
+   cap. The
    scheduled retention path conditionally deletes stale `stock_analysis`
    documents in batches without creating a regenerable local archive; it never
    touches users, orders, paper-trading events, or public-feed collections.
    Other-market documents are not touched by the scheduled job; a separate,
    explicit allow-listed command is required before retiring an old market.
-9. The school server can analyse the full bounded KR universe into compressed
-   local payloads first. Firebase receives only the deterministic top 1,000:
+9. The school server analyses the full bounded KR universe into compressed
+   local payloads first. Firebase receives only the deterministic top 200:
    `confidenceScore` descending, `marcap` descending as the tie-breaker, then
    code ascending. The selected ID list is passed to retention so it cannot
    accidentally replace score selection with a market-cap-only selection.
@@ -61,11 +62,12 @@ Hosting-only releases are allowed after the frontend checks pass.
 
 ## 2026-09-09 local-ranking boundary
 
-- The school server now fetches and analyses the configured full KOSPI public-
-  data universe locally. Firebase is not initialized during candidate analysis.
+- The school server now fetches and analyses the configured full KOSPI/KOSDAQ
+  public-data universe locally. Firebase is not initialized during candidate analysis.
 - Only the deterministic ranked cap is persisted: `confidenceScore` descending,
-  `marcap` descending, then code ascending. `MESUGAK_MAX_STOCKS` is hard-capped
-  at 1,000, so a run with fewer successful candidates stores fewer than 1,000.
+  `marcap` descending, then code ascending. `MESUGAK_MAX_STOCKS` defaults to 200
+  and cannot exceed that hard cap, so a run with fewer successful candidates
+  stores fewer than 200.
 - The selected IDs are written to `runtime/checkpoints/analysis_keep_KR.json`;
   KR retention uses that exact set, preventing a market-cap fallback from
   deleting a selected high-score result.

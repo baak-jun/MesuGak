@@ -1,13 +1,14 @@
 ﻿.compliance-dock {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  z-index: 30;
+  position: static;
   display: grid;
   grid-template-columns: minmax(190px, 1fr) auto;
   align-items: center;
   gap: 14px;
-  max-width: min(760px, calc(100vw - 32px));
+  grid-column: 1 / -1;
+  width: min(100%, 980px);
+  max-width: 980px;
+  margin: 24px auto 0;
+  box-sizing: border-box;
   border: 1px solid color-mix(in srgb, var(--accent, #0f7f7a) 28%, var(--border, #d3dde2));
   border-radius: 18px;
   background: color-mix(in srgb, var(--panel-bg, #fff) 94%, transparent);
@@ -156,8 +157,11 @@
   margin: 0;
   color: var(--text);
   font-size: clamp(34px, 6vw, 64px);
-  line-height: 0.95;
+  line-height: 1.1;
   letter-spacing: -0.075em;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  text-wrap: balance;
 }
 
 .legal-hero strong {
@@ -200,6 +204,27 @@
   font-size: 13px;
   font-weight: 850;
   line-height: 1.55;
+}
+
+.legal-runtime-status {
+  width: min(100%, 980px);
+  margin: 14px auto 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel-soft);
+  padding: 16px 18px;
+}
+
+.legal-runtime-status strong {
+  display: block;
+  margin-bottom: 7px;
+}
+
+.legal-runtime-status p {
+  margin: 4px 0 0;
+  color: var(--text-soft);
+  font-size: 12.5px;
+  line-height: 1.7;
 }
 
 .legal-sections {
@@ -283,7 +308,7 @@
   }
 
   .legal-hero h1 {
-    font-size: clamp(32px, 12vw, 48px);
+    font-size: clamp(26px, 8.6vw, 44px);
   }
 
   .legal-hero strong {

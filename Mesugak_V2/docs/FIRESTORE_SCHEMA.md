@@ -197,11 +197,15 @@ It deliberately excludes KIS account numbers, token/credential values, holdings,
 
 ## `paper_trading_runtime/latest`
 
-School-server intraday paper trader writes the latest loop status here so the UI can show monitored stocks even when no order is executed.
+School-server intraday paper traders write the latest loop status here so the
+UI can show monitored stocks even when no order is executed. The realtime
+runner updates this document at its report interval rather than once per
+WebSocket tick.
 
 - `source`: `Mesugak_V2`
-- `mode`: `school_server_paper`
-- `status`: `dry_run`, `applied`, `account_sync_failed`, or loop status
+- `mode`: `school_server_paper` or `kis_realtime_paper`
+- `status`: `dry_run`, `applied`, `streaming_dry_run`, `streaming_execute`,
+  `not_trading_day`, or a fail-closed operational status
 - `market`
 - `execute`
 - `candidateCount`
@@ -221,6 +225,20 @@ School-server intraday paper trader writes the latest loop status here so the UI
 - `quoteErrors`
 - `checkedAt`
 - `updatedAt`
+
+Realtime-specific fields include `dryRun`, `watchCount`, bounded `watchCodes`,
+`pendingOrderCount`, `signalCount`, `lastTicks`, `lastPrices`, and a bounded
+`lastSignals` summary. Raw credentials, access tokens, and raw WebSocket
+payloads are not stored.
+
+The contest namespace uses `contest_paper_trading_runtime/latest`. Its
+additional operational fields are `candidateCount`, `candidateSource`,
+`analysisRunDate`, `analysisTargetCount`, `analysisFailureCount`, `maxWatch`,
+`coreWatchCount`, `explorationCodes`, `watchCycle`, `receivedTickCount`,
+`lastTickAt`, `entryEnabled`, `reconciliationRequired`, and
+`restRequestIntervalSeconds`. `receivedTickCount` counts parsed trade records
+including all records in a batched provider frame. Quote histories remain
+bounded to the current watch set. These fields are administrator-only.
 
 ## `paper_trading_runtime_events/{autoId}`
 

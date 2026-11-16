@@ -56,6 +56,43 @@ def _expected_run_date(now: dt.datetime, expected_by: str) -> dt.date:
     return candidate
 
 
+def _parse_date(value: object) -> dt.date | None:
+    text = str(value or "").strip()
+    for fmt in ("%Y-%m-%d", "%Y%m%d", "%Y/%m/%d"):
+        try:
+            return dt.datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _provider_has_no_newer_date(
+    root: Path,
+    market: str,
+    last_success: dt.datetime,
+    now: dt.datetime,
+    watcher_stale_minutes: int,
+) -> bool:
+    """Return true only for a recent, successful no-new-date provider probe.
+
+    A missing, stale, or failed watcher must not hide a real publication
+    failure.  This exception is intentionally narrow so a Korean exchange
+    holiday does not create a false Gmail alert while provider/API failures
+    remain visible to the health monitor.
+    """
+    watch = _read_json(root / "runtime" / "watch" / f"public_data_{market}.json")
+    if str(watch.get("status") or "") != "unchanged":
+        return False
+    checked_at = _parse_time(watch.get("checkedAt"))
+    latest_date = _parse_date(watch.get("latestAvailableDate"))
+    if checked_at is None or latest_date is None:
+        return False
+    age_minutes = (now - checked_at).total_seconds() / 60
+    if age_minutes < 0 or age_minutes > max(90, int(watcher_stale_minutes)):
+        return False
+    return latest_date <= last_success.date()
+
+
 def find_health_issue(
     root: Path,
     market: str,
@@ -95,6 +132,13 @@ def find_health_issue(
     if not last_success:
         return "success_missing", f"{market} 전체 분석·공개 게시 성공 기록이 없습니다."
     if last_success.date() < expected_date:
+        watcher_stale_minutes = max(90, int(os.getenv("MESUGAK_PUBLIC_WATCH_STALE_MINUTES", "90")))
+        if _provider_has_no_newer_date(root, market, last_success, now, watcher_stale_minutes):
+            return (
+                None,
+                f"{market} 제공기관에 마지막 게시일 이후 새 거래일 데이터가 없습니다. "
+                f"lastSuccess={last_success.isoformat(timespec='seconds')}",
+            )
         return (
             "publication_stale",
             f"{market} 마지막 전체 분석·공개 게시 성공은 {last_success.isoformat(timespec='seconds')}입니다. "
@@ -103,7 +147,7 @@ def find_health_issue(
     return None, f"{market} 전체 분석·공개 게시가 정상입니다. lastSuccess={last_success.isoformat(timespec='seconds')}"
 
 
-def send_gmail(subject: str, body: str) -> None:
+def send_gmail(subject: str, body: str, *, message_id: str | None = None) -> None:
     user = os.getenv("MESUGAK_GMAIL_USER", "").strip()
     password = os.getenv("MESUGAK_GMAIL_APP_PASSWORD", "").replace(" ", "")
     recipient = os.getenv("MESUGAK_ALERT_EMAIL_TO", user).strip()
@@ -116,10 +160,23 @@ def send_gmail(subject: str, body: str) -> None:
     message["From"] = user
     message["To"] = recipient
     message["Subject"] = subject
+    if message_id:
+        message['Message-ID'] = message_id
     message.set_content(body)
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context(), timeout=30) as smtp:
         smtp.login(user, password)
         smtp.send_message(message)
+
+
+def _incident_key(issue: str) -> str:
+    """Group alert labels that describe one underlying pipeline incident."""
+    if issue in {"pipeline_failure", "checkpoint_stalled", "checkpoint_interrupted"}:
+        return "analysis_pipeline"
+    if issue == "publication_stale":
+        return "publication"
+    if issue == "cost_guard_blocked":
+        return "cost_guard"
+    return issue
 
 
 def _notify(root: Path, market: str, issue: str, detail: str, now: dt.datetime, force: bool = False) -> bool:
@@ -127,9 +184,14 @@ def _notify(root: Path, market: str, issue: str, detail: str, now: dt.datetime, 
     state = _read_json(state_path)
     last_sent = _parse_time(state.get("lastSentAt"))
     cooldown_hours = max(1, int(os.getenv("MESUGAK_ALERT_COOLDOWN_HOURS", "12")))
-    duplicate = state.get("lastIssue") == issue
+    incident_key = _incident_key(issue)
+    previous_key = str(state.get("incidentKey") or _incident_key(str(state.get("lastIssue") or "")))
+    duplicate = previous_key == incident_key
     cooling_down = last_sent and (now - last_sent).total_seconds() < cooldown_hours * 3600
-    if not force and duplicate and cooling_down:
+    # ``force`` is retained for callers from older wrappers, but it must not
+    # turn one pipeline failure into a second email when the health check has
+    # already reported the same incident.
+    if duplicate and cooling_down:
         print({"status": "alert_suppressed", "issue": issue, "lastSentAt": state.get("lastSentAt")})
         return False
 
@@ -137,7 +199,12 @@ def _notify(root: Path, market: str, issue: str, detail: str, now: dt.datetime, 
     send_gmail(f"{prefix} 갱신 이상: {market}", f"{detail}\n\n감지 시각: {now.isoformat(timespec='seconds')}")
     _write_json(
         state_path,
-        {"lastIssue": issue, "lastSentAt": now.isoformat(timespec="seconds"), "healthy": False},
+        {
+            "lastIssue": issue,
+            "incidentKey": incident_key,
+            "lastSentAt": now.isoformat(timespec="seconds"),
+            "healthy": False,
+        },
     )
     print({"status": "alert_sent", "issue": issue})
     return True
@@ -166,7 +233,7 @@ def check(root: Path, market: str, now: dt.datetime) -> int:
     if previous.get("healthy") is False:
         prefix = os.getenv("MESUGAK_ALERT_SUBJECT_PREFIX", "[MesuGak 학교 서버]").strip()
         send_gmail(f"{prefix} 갱신 복구: {market}", f"{detail}\n\n확인 시각: {now.isoformat(timespec='seconds')}")
-    _write_json(state_path, {"lastIssue": None, "lastSentAt": None, "healthy": True})
+    _write_json(state_path, {"lastIssue": None, "incidentKey": None, "lastSentAt": None, "healthy": True})
     print({"status": "healthy", "detail": detail})
     return 0
 
@@ -196,7 +263,7 @@ def main() -> None:
         print({"status": "success_marked", "market": market, "finishedAt": now.isoformat(timespec="seconds")})
         return
     if args.notify_failure:
-        _notify(root, market, "pipeline_failure", args.detail, now, force=True)
+        _notify(root, market, "pipeline_failure", args.detail, now)
         return
     if args.send_test:
         prefix = os.getenv("MESUGAK_ALERT_SUBJECT_PREFIX", "[MesuGak 학교 서버]").strip()

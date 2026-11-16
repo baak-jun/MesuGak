@@ -1,5 +1,7 @@
 # School Server Paper Trading
 
+> Historical implementation notes. Current contest/site separation, effective settings, and observed cloud remnants are documented in [운영 인수인계](operations/README.md). In particular, the statement below that Functions hold no KIS credentials is not confirmed-current: an older cloud function still has credential environment variables. Do not copy their values into documentation.
+
 ## Ownership
 
 The school server is the only process that runs market analysis, accesses the
@@ -9,14 +11,60 @@ run a trading schedule.
 
 ## Daily flow
 
+As of 2026-10-12 the operator requests contest priority. The p102 weekday
+09:05 site-linked trader is paused; its crontab line remains commented for
+restoration after the contest. The shared KOSPI/KOSDAQ analysis and contest
+runner remain active.
+
+The complete scored universe is published atomically to
+`runtime/checkpoints/realtime_candidates_KR.json` on the school server.
+The contest runner reads this snapshot rather than the Firebase top-200 feed.
+Firebase persistence retains its existing 200-symbol cap. Alphanumeric
+six-character share codes are included alongside numeric codes.
+
+The realtime watch set reserves approximately 10% of its slots for random
+exploration; the remainder keeps holdings/pending orders first and then the
+highest daily scores. At 39 symbols this is 35 core slots plus 4 explorers;
+at 20 symbols it is 18 plus 2. Exploration draws without replacement until
+the remaining pool has been visited, then reshuffles. The default cycle is
+60 seconds, and unsubscribed quote history is discarded to bound memory.
+
+The WebSocket budget is 40 subscriptions including the virtual-account
+fill-notice channel, so execution watches at most 39 price symbols. A provider
+limit rejection halves the price watch budget before reconnecting, while
+protecting holdings/pending orders. REST requests are serialized with an
+initial two-second interval; explicit `EGW00201`, `EGW00215`, and HTTP 429 rejections increase the
+interval and permit bounded retries. Ambiguous order network failures are
+never retried automatically and pause new entries until reconciliation.
+Token caches are keyed and validated by API key so site and contest credentials
+cannot reuse each other's access token.
+
+In the p102 connectivity check on 2026-10-12, port 31000 closed the HTTP
+handshake. The operator's existing virtual-account approval was accepted for
+both `H0STCNT0` and `H0STCNI9` on
+`ws://ops.koreainvestment.com:21000/tryitout`, configured only in the protected
+contest environment. REST orders remain restricted to the virtual-investment
+host. Verify both subscriptions before using an alternative WebSocket route.
+
+Official examples: [frame layout and ping echo](https://github.com/koreainvestment/open-trading-api/blob/main/legacy/websocket/python/ops_ws_sample.py),
+[40-subscription budget](https://github.com/koreainvestment/open-trading-api/blob/main/backtester/kis_backtest/providers/kis/websocket.py).
+
 1. After market close, the school server performs the full-universe analysis
    and saves V2 candidates to Firestore.
-2. During the next Korean regular session, the school-server trader polls
-   Firestore candidates and KIS current prices at a configurable interval.
-   It polls only held stocks plus the top-ranked live-candidate limit; it does
-   not request a quote for the entire market on every iteration.
-3. It evaluates the pure policy, submits virtual orders through KIS, then
-   writes executions, positions, and an account snapshot to Firestore.
+2. During the next Korean regular session, `jobs/kis_realtime_trader.py`
+   subscribes to KIS `H0STCNT0` trade ticks for a bounded watch list. The list
+   is refreshed from KIS fluctuation rankings every 60 seconds, while held
+   symbols remain subscribed first. It does not request a REST quote for every
+   symbol on every tick.
+3. It evaluates the pure realtime policy, writes periodic runtime heartbeats
+   to Firestore, and keeps order idempotency/reconciliation state in a local
+   SQLite WAL file. KIS order submission is opt-in with `--execute`; the
+   default is dry-run.
+
+The stream still records the latest tick needed for one-second replay bars,
+but policy evaluation is throttled to at most four evaluations per symbol per
+second and the in-memory history is bounded. This prevents a high-volume
+symbol from turning every provider tick into a Python/Firestore operation.
 
 ## Score meaning during the first implementation
 
@@ -24,11 +72,13 @@ run a trading schedule.
 daily score, not a tick-by-tick score. Polling therefore monitors price and
 trailing-stop conditions while using the latest saved analysis score for entry,
 rotation, and score exits. Intraday re-scoring requires a separate live-bar
-pipeline and is intentionally not inferred from a single quote.
+pipeline and is intentionally not inferred from a single quote. The realtime
+runner combines that daily score with short-window return, trade value, volume
+acceleration, VWAP, breakout, and spread guards.
 
 ## Policy
 
-### Entry
+### Poller entry (legacy one-shot compatibility path)
 
 - A candidate must have `BUY_CANDIDATE` or `STRONG_BUY`, no defensive risk
   state, and score at least `buy_score_min`.
@@ -47,7 +97,37 @@ Exit an entire position when either condition is met:
 The server updates each position's high-water mark from every successful quote
 poll before evaluating the trailing stop.
 
-### Rotation and proportional profit taking
+### Realtime entry
+
+- The daily gate remains `BUY_CANDIDATE`/`STRONG_BUY`, score at least 60, no
+  defensive risk, price at least 1,000 KRW, prior turnover at least 5 billion
+  KRW, and market cap at least 50 billion KRW.
+- In the first minute, require a 10-second return of at least 0.8% and
+  10-second trade value of at least 300 million KRW. Later, require 10/30/60
+  second returns of 0.4%/0.8%/1--4%, 30-second trade value of at least 1
+  billion KRW, two-times volume acceleration, and a 60-second breakout.
+- Reject spreads above 0.3%, prices more than 3% above the 60-second VWAP,
+  and a symbol until two positive evaluations confirm the signal.
+- Entries use a KIS limit order at the current best ask. An accepted limit is
+  cancelled after two seconds and repriced at most once; exits use a market
+  order. A lost response is reconciled against the local SQLite order state
+  and KIS daily-order inquiry before another signal is allowed.
+
+### Realtime exit and session rules
+
+The realtime runner updates the high-water mark from every tick. Same-day stop
+loss is 3%, trailing stop is 6%, profit lock activates at +3% and trails by 2%,
+and a 10-second return of -0.8% below VWAP is a momentum-reversal exit. A
+symbol exited during the session is blocked from same-day re-entry. New
+entries stop at 15:15; a position is held overnight only when it is profitable,
+above VWAP, still has a positive 30-second trend, and retains a qualifying
+daily score.
+
+The runner has no P&L-based daily halt or global daily entry-count cap by
+design for the university contest profile. It does enforce the configured
+maximum of five concurrent positions and a 20% target weight per position.
+
+### Poller rotation and proportional profit taking (legacy)
 
 When a higher-scored candidate needs capital:
 
@@ -62,6 +142,11 @@ When a higher-scored candidate needs capital:
 No order is created if live prices are unavailable, the market is closed, or a
 KIS order for the same symbol and side is already pending.
 
+The realtime contest runner does not force a score-based proportional
+rotation on every refresh; it keeps the daily gate stable and uses the
+explicit realtime exit rules above. This avoids turning a temporary ranking
+refresh into a burst of replacement orders.
+
 ## Safety defaults
 
 - KIS virtual-investment mode only; production mode requires an explicit code
@@ -74,14 +159,40 @@ KIS order for the same symbol and side is already pending.
 
 ## Server operation
 
-Start one process at 08:50 KST on weekdays. It waits until 09:00, polls every
-30 seconds by default, and exits after 15:35. Use a systemd service/timer with
-an exclusive process lock rather than spawning overlapping cron loops.
+Start one process at 08:50 KST on weekdays. It waits until 09:00, keeps one
+WebSocket connection through 15:35, and refreshes the watch list every 60
+seconds. Use a systemd service with an exclusive process lock rather than
+spawning overlapping cron loops. A REST poller remains available for
+compatibility, but it is not the all-day contest path.
 
 Before the loop starts, the runner checks KIS's domestic-stock holiday feed.
 On a non-operating day it exits immediately without polling quotes or creating
-orders. The default environment path is `functions/.env`, independent of the
-cron working directory; set `MESUGAK_ENV_FILE` only to override it.
+orders. The direct Python runner defaults to `functions/.env`; the managed
+`run_kis_realtime_trader.sh` wrapper prefers `functions/.env.contest` when it
+exists. Set `MESUGAK_ENV_FILE` to override either default.
+
+### Realtime runner commands
+
+```bash
+# Credentialed validation: no order endpoint is called.
+python Mesugak_V2/functions/jobs/kis_realtime_trader.py \
+  --env-file Mesugak_V2/functions/.env.contest
+
+# Offline policy replay (JSONL or JSONL.GZ; no KIS or Firestore access).
+python Mesugak_V2/functions/jobs/kis_realtime_trader.py \
+  --replay runtime/realtime_bars/realtime_2026-09-23.jsonl.gz \
+  --candidates runtime/candidates.json
+
+# Explicit virtual-order mode, only after replay and dry-run acceptance.
+python Mesugak_V2/functions/jobs/kis_realtime_trader.py \
+  --env-file Mesugak_V2/functions/.env.contest --execute
+```
+
+`--execute` requires `KIS_PAPER_HTS_ID` so the `H0STCNI9` fill-notice
+subscription can reconcile accepted, partial, filled, and rejected orders. The
+runner pauses new entries when the holiday check, watch refresh, account sync,
+WebSocket, or order reconciliation is uncertain; it does not guess through an
+operational failure.
 
 ## On-demand account refresh from the web
 
@@ -124,4 +235,7 @@ this privilege.
 - `MESUGAK_PROFIT_LOCK_MIN_PNL_PCT=0.005`: 실제 청산 시점에도 최소 0.5% 이익이 남을 때만 이 규칙으로 청산합니다.
 - `MESUGAK_SAME_DAY_STOP_LOSS_PCT=0.03`: 당일 새로 매수한 종목의 실시간 호가가 평균 매수가보다 3% 이상 내려가면 전량 시장가 매도합니다. 이 사유로 매도된 종목은 당일 재진입하지 않습니다.
 
-모든 주문은 KIS 모의투자 시장가(`ORD_DVSN=01`, `ORD_UNPR=0`)로 전송됩니다. 현재 장중 루프는 단일 현재가만 보므로, 분봉 기반 볼린저 상단 재진입/중앙선 이탈 규칙은 별도 분봉 데이터 경로를 추가하기 전에는 적용하지 않습니다.
+기존 `school_paper_trader.py` 호환 폴러는 시장가 주문을 사용하지만, 대회용
+`kis_realtime_trader.py`는 진입 지정가(`ORD_DVSN=00`)와 청산 시장가
+(`ORD_DVSN=01`)를 분리합니다. 실시간 정책은 순수 함수로 분리되어 있어
+동일한 규칙을 JSONL/압축 JSONL 리플레이에서 먼저 검증할 수 있습니다.

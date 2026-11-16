@@ -3,6 +3,7 @@ dist/
 .firebase/
 
 # Local review and document-generation artifacts
+/.cache/server-audit-20261015/
 /output/pdf/
 /tmp/pdfs/
 patch_keys.py
