@@ -2090,9 +2090,8 @@ export default function ResearchApp() {
         </header>
         {workspaceView === 'console' && <>{adminViewActive ? selected ? <><div className="analysis-layout"><TechnicalChart stock={selected} loading={detailLoadingId === selected?.id} /><ScoreDock stock={selected} /></div><PublicAnalysisPanel stock={selected} compact={isCompactLayout} /></> : <PublicAnalysisUnavailable message="관리자 분석 목록을 아직 불러오지 못했습니다. 잠시 후 새로고침해 주세요." /> : selected ? <PublicAnalysisPanel stock={selected} compact={isCompactLayout} /> : <PublicAnalysisUnavailable message={publicLiveDataApproved ? loadError : '공개 분석 데이터를 준비하고 있습니다. 잠시 후 다시 확인해 주세요.'} />}{publicAnalysisAdReady && <AdSenseSlot title="분석 본문 광고" placement="analysis" />}</>}
         {workspaceView === 'executions' && adminViewActive && <div className="execution-page"><PortfolioSnapshot portfolio={portfolio} onRefresh={requestPaperAccountRefresh} refreshBusy={paperRefreshBusy} refreshMessage={paperAccountMessage} canRefresh={Boolean(adminViewActive && firebaseReady && db)} /><RuntimeMonitorPanel runtime={runtimeMonitor} /><PrivatePerformancePanel performance={privatePerformance} /><TradeLogPanel logs={tradeLogs} /><OrdersPanel orders={orders} /></div>}
-
+        {!adminViewActive && <AnalysisEducationGuide />}
       </section>
-      {!adminViewActive && <AnalysisEducationGuide />}
       {showDisclaimerModal && <DisclaimerModal onClose={() => setShowDisclaimerModal(false)} />}
     {!user && <ComplianceDock />}
     </main>
