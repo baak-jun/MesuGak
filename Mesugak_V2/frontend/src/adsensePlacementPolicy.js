@@ -1,4 +1,7 @@
 export const adsenseSlotCountByRoute = Object.freeze({
+  '/': 1,
+  '/learn': 1,
+  '/learn/articles': 1,
   '/learn/ichimoku': 1,
   '/learn/bollinger': 1,
   '/learn/moving-average': 1,
@@ -12,5 +15,9 @@ export const adsenseSlotCountByRoute = Object.freeze({
   '/learn/articles/volume': 2,
   '/learn/articles/valuation': 2,
   '/learn/cases': 2,
+  '/learn/lab': 1,
   '/learn/glossary': 1,
+  '/methodology': 1,
+  '/about': 1,
+  '/analysis': 1,
 });

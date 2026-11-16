@@ -44,7 +44,10 @@
     ],
     "rewrites": [
       { "source": "/", "destination": "/index.html" },
+      { "source": "/analysis", "destination": "/index.html" },
       { "source": "/learn", "destination": "/index.html" },
+      { "source": "/learn/articles", "destination": "/index.html" },
+      { "source": "/learn/articles/**", "destination": "/index.html" },
       { "source": "/learn/ichimoku", "destination": "/index.html" },
       { "source": "/learn/bollinger", "destination": "/index.html" },
       { "source": "/learn/moving-average", "destination": "/index.html" },
@@ -53,6 +56,7 @@
       { "source": "/learn/valuation", "destination": "/index.html" },
       { "source": "/learn/cases", "destination": "/index.html" },
       { "source": "/learn/lab", "destination": "/index.html" },
+      { "source": "/learn/glossary", "destination": "/index.html" },
       { "source": "/methodology", "destination": "/index.html" },
       { "source": "/about", "destination": "/index.html" },
       { "source": "/terms", "destination": "/index.html" },

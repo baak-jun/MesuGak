@@ -1,4 +1,5 @@
 import { BookOpen } from 'lucide-react';
+import { AdSenseSlot } from './AdSenseSlot.jsx';
 import './learning.css';
 
 /**
@@ -47,6 +48,7 @@ export function AnalysisEducationGuide() {
           <a href="/learn/cases">사례 수업</a>에서 지표 간 충돌 사례를 비교해 보세요.
         </p>
       </section>
+      <AdSenseSlot placement="learning" title="광고" className="learning-inline-ad" />
     </article>
   );
 }

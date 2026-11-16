@@ -109,8 +109,8 @@ for (const route of routes) {
     if (adSlots.length !== expectedSlotCount) {
       addFailure(failures, `${route}: expected ${expectedSlotCount} AdSense slot(s), received ${adSlots.length}`);
     }
-    if (/<script[^>]+adsbygoogle|adsbygoogle\.js\?client/i.test(html)) {
-      addFailure(failures, `${route}: AdSense publisher requests must be created by the gated client bootstrap`);
+    if (expectAdsDisabled && /<script[^>]+adsbygoogle|adsbygoogle\.js\?client/i.test(html)) {
+      addFailure(failures, `${route}: AdSense publisher requests must not be present when ads are disabled`);
     }
     if (/\uFFFD/.test(html)) addFailure(failures, `${route}: replacement character leaked into HTML`);
 

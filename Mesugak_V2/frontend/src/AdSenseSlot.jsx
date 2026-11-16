@@ -9,7 +9,7 @@ export function AdSenseSlot({ title = '광고', placement = 'body', compact = fa
   const requestedRef = useRef(false);
   const supportedPlacement = placement === 'learning' || placement === 'analysis';
   const placementEnabled = placement === 'learning' || gate.analysisAdsRequested;
-  const slotId = supportedPlacement ? gate.slotIds[placement] : '';
+  const slotId = supportedPlacement ? (gate.slotIds[placement] || gate.slotIds.learning) : '';
 
   useEffect(() => {
     let cancelled = false;
@@ -17,6 +17,10 @@ export function AdSenseSlot({ title = '광고', placement = 'body', compact = fa
 
     void loadAdSenseScript(gate.clientId).then(() => {
       if (cancelled || requestedRef.current || !elementRef.current) return;
+      if (elementRef.current.dataset.adsbygoogleStatus) {
+        requestedRef.current = true;
+        return;
+      }
       requestedRef.current = true;
       try {
         // Google CMP is loaded by the publisher tag and applies the visitor's
@@ -57,7 +61,7 @@ export function AdSenseSlot({ title = '광고', placement = 'body', compact = fa
       <ins
         ref={elementRef}
         className="adsbygoogle skeleton-glow"
-        style={{ display: 'block', minHeight: '90px', borderRadius: '12px' }}
+        style={{ display: 'block', width: '100%', minHeight: '90px', borderRadius: '12px' }}
         data-ad-client={gate.clientId}
         data-ad-slot={slotId}
         data-ad-format="auto"

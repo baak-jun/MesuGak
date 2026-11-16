@@ -1,4 +1,5 @@
 import { ArrowRight, BookOpen, ShieldCheck } from 'lucide-react';
+import { AdSenseSlot } from './AdSenseSlot.jsx';
 import { BRAND_FULL } from './brand';
 import { ComplianceDock } from './LegalPages.jsx';
 import { LearningFooter, SiteNav } from './LearningPages.jsx';
@@ -54,6 +55,7 @@ export function HomeLandingPage() {
           <div className="section-heading"><span>{home.originality.eyebrow}</span><h2 id="home-originality-title">{home.originality.title}</h2></div>
           <div className="guide-article-note"><ShieldCheck size={19} aria-hidden="true" /><p>{home.originality.body} {home.originality.contactBefore} <a href="mailto:or_not_official@naver.com">or_not_official@naver.com</a>{home.originality.contactAfter}</p></div>
         </section>
+        <AdSenseSlot placement="learning" title="광고" className="learning-inline-ad" />
       </div>
       <LearningFooter />
       <ComplianceDock />

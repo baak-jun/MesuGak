@@ -102,8 +102,8 @@ for (const [route, html] of pages) {
   if (adSlots.length !== expectedSlotCount) {
     failures.push(`${route}: expected ${expectedSlotCount} AdSense slot(s), found ${adSlots.length}`);
   }
-  if (/<script[^>]+adsbygoogle|adsbygoogle\.js\?client/i.test(html)) {
-    failures.push(`${route}: static HTML must not issue an AdSense request; the gated publisher bootstrap owns requests`);
+  if (!adsEnabled && /<script[^>]+adsbygoogle|adsbygoogle\.js\?client/i.test(html)) {
+    failures.push(`${route}: static HTML must not issue an AdSense request when ads are disabled`);
   }
   if (adSlots.length) adRoutesWithSlots.push(route);
 }

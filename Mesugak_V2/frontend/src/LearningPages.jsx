@@ -125,6 +125,7 @@ function LearningHome() {
             <a className="guide-card practice-card" href="/learn/glossary"><div className="guide-card-top"><span>기술지표 용어집</span><ArrowRight size={17} /></div><p>일봉·기준일·추세·변동성 같은 기본 용어를 짧은 정의와 실제 읽는 순서로 정리합니다.</p><small>용어 · 예시 · 해석의 한계</small></a>
           </div>
         </section>
+        <AdSenseSlot placement="learning" title="광고" className="learning-inline-ad" />
       </div>
       <LearningFooter />
       <ComplianceDock />
@@ -206,6 +207,7 @@ function ArticlesIndexPage() {
             </a>
           ))}
         </div>
+        <AdSenseSlot placement="learning" title="광고" className="learning-inline-ad" />
       </div>
       <LearningFooter />
       <ComplianceDock />
@@ -384,6 +386,7 @@ function ConditionLabPage() {
             </> : <p className="lab-empty">왼쪽에서 조건을 하나 이상 선택하면 각 조건의 의미와 조합 해석이 여기에 표시됩니다.</p>}
           </div>
         </section>
+        <AdSenseSlot placement="learning" title="광고" className="learning-inline-ad" />
       </div>
       <LearningFooter />
       <ComplianceDock />
@@ -455,7 +458,7 @@ function MethodologyPage() {
             {editorialChangelog.map((entry) => <li key={`${entry.date}-${entry.title}`}><strong>{entry.date} · {entry.title}</strong><span>{entry.body}</span></li>)}
           </ol>
         </section>
-         <article className="methodology-article">{[...methodologySections, ...methodologySupplementSections].map((section) => <section key={section.title} className="guide-article-section"><h2>{section.title}</h2>{section.body.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</section>)}<div className="source-box"><strong>데이터 출처</strong><p>금융위원회 공공데이터포털의 주식시세정보·지수시세정보 API를 통해 확정 일봉 데이터를 수집합니다.</p><a href="https://www.data.go.kr/data/15094808/openapi.do" target="_blank" rel="noreferrer">주식시세정보 원문 보기 <ExternalLink size={14} /></a></div></article>
+         <article className="methodology-article">{[...methodologySections, ...methodologySupplementSections].map((section) => <section key={section.title} className="guide-article-section"><h2>{section.title}</h2>{section.body.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</section>)}<div className="source-box"><strong>데이터 출처</strong><p>금융위원회 공공데이터포털의 주식시세정보·지수시세정보 API를 통해 확정 일봉 데이터를 수집합니다.</p><a href="https://www.data.go.kr/data/15094808/openapi.do" target="_blank" rel="noreferrer">주식시세정보 원문 보기 <ExternalLink size={14} /></a></div><AdSenseSlot placement="learning" title="광고" className="learning-inline-ad" /></article>
       </div>
       <LearningFooter />
       <ComplianceDock />
@@ -481,6 +484,7 @@ function AboutPage() {
         </section>
         <section className="editorial-note"><h2>콘텐츠 운영과 정정 안내</h2><p>지표 수업과 사례 수업은 각 조건의 정의, 수식 계산 과정, 그리고 신호가 엇갈리는 반례를 중심으로 구성합니다. 최근 콘텐츠 수정일은 {CONTENT_UPDATED_ON}이며, 오류 제보나 문의는 <a href="mailto:or_not_official@naver.com">or_not_official@naver.com</a>으로 보내 주세요.</p></section>
          {import.meta.env.VITE_SUPPORT_URL && <section className="support-note"><h2>커피로 응원하기</h2><p>후원은 서비스 운영을 위한 자율적인 응원이며, 후원 여부에 따라 추가 분석·개인별 추천·우선 답변을 제공하지 않습니다.</p><a href={import.meta.env.VITE_SUPPORT_URL} target="_blank" rel="noopener noreferrer">커피 후원 링크 <ExternalLink size={14} /></a></section>}
+         <AdSenseSlot placement="learning" title="광고" className="learning-inline-ad" />
       </div>
       <LearningFooter />
       <ComplianceDock />
