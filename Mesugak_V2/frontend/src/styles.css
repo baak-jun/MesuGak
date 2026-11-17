@@ -100,6 +100,19 @@ body {
   margin: 0;
 }
 
+/* Block unrequested Google Auto Ads overlays (side rails, anchors, auto-inserted blocks) from covering UI or resizing containers */
+.google-auto-placed,
+ins.adsbygoogle:not(.skeleton-glow) {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  max-width: 0 !important;
+  max-height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
 button,
 a {
   font: inherit;

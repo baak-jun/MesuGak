@@ -61,11 +61,11 @@ export function AdSenseSlot({ title = '광고', placement = 'body', compact = fa
       <ins
         ref={elementRef}
         className="adsbygoogle skeleton-glow"
-        style={{ display: 'block', width: '100%', minHeight: '90px', borderRadius: '12px' }}
+        style={{ display: 'block', width: '100%', maxWidth: '100%', minHeight: '90px', borderRadius: '12px', overflow: 'hidden' }}
         data-ad-client={gate.clientId}
         data-ad-slot={slotId}
         data-ad-format="auto"
-        data-full-width-responsive="true"
+        data-full-width-responsive="false"
       />
     </aside>
   );

@@ -9,7 +9,7 @@ import './learning.css';
  */
 export function AnalysisEducationGuide() {
   return (
-    <article className="analysis-landing-article analysis-live-guide" aria-label="공개 분석 읽기 안내">
+    <article className="analysis-live-guide" aria-label="공개 분석 읽기 안내">
       <div className="analysis-guide-heading">
         <BookOpen size={18} aria-hidden="true" />
         <div>
