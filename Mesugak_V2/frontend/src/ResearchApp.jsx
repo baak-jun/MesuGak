@@ -1311,6 +1311,8 @@ function PublicAnalysisPanel({ stock, compact = false }) {
         {stock.raw?.riskFlags?.length > 0 && <div className="public-risk-note"><Shield size={16} /><span><strong>추가 주의 신호:</strong> {stock.raw.riskFlags.map(publicReasonLabel).join(' · ')}</span></div>}
       </section>
 
+      <AdSenseSlot placement="learning" title="광고" className="learning-inline-ad" />
+
       <section id={sectionId('indicators')} className="public-analysis-section public-state-detail">
         <div className="public-section-heading"><span>03 · 지표별 상태 해설</span><h4>지표별로 다시 살펴볼까요?</h4><p>다섯 가지 기술지표 각각의 현재 판정 상태와 세부 근거입니다.</p></div>
         {states.length ? states.map(([key, state]) => {

@@ -35,11 +35,20 @@
   box-sizing: border-box;
 }
 
+.public-analysis-panel > .adsense-slot.learning-inline-ad,
 .analysis-live-guide > .adsense-slot.learning-inline-ad {
-  margin: 4px 0 0;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 18px 0;
   padding: 14px 16px;
+  border: 1px solid var(--border);
   border-radius: 16px;
   background: var(--panel-soft);
+  box-sizing: border-box;
+}
+
+.analysis-live-guide > .adsense-slot.learning-inline-ad {
+  margin: 4px 0 0;
 }
 
 .analysis-live-guide > section:not(.guide-article-note) {

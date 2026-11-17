@@ -46,6 +46,8 @@ export function HomeLandingPage() {
           </ol>
         </section>
 
+        <AdSenseSlot placement="learning" title="광고" className="learning-inline-ad" />
+
         <section className="learning-section learning-method-callout home-method-callout" aria-labelledby="home-method-title">
           <div><span>{home.method.eyebrow}</span><h2 id="home-method-title">{home.method.title}</h2><p>{home.method.body}</p></div>
           <a className="text-link-button" href="/methodology">방법론 읽기 <ArrowRight size={16} /></a>

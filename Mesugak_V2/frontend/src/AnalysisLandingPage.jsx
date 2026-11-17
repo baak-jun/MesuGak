@@ -23,6 +23,7 @@ export function AnalysisLandingPage() {
         <article className="analysis-landing-article">
           <section><h2>{analysis.what.title}</h2><p>{analysis.what.body}</p></section>
           <section><h2>{analysis.order.title}</h2><ol>{analysis.order.steps.map((step) => <li key={step}>{step}</li>)}</ol></section>
+          <AdSenseSlot placement="learning" title="광고" className="learning-inline-ad" />
           <section><h2>{analysis.conflict.title}</h2>{analysis.conflict.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</section>
           <section><h2>{analysis.score.title}</h2><p>{analysis.score.body} 가중치와 계산 예시는 <a href="/methodology">분석 방법론</a>에 적었습니다.</p><p>{analysis.score.dateReminder} 낯선 말은 <a href="/learn/glossary">기술지표 용어집</a>에서 확인할 수 있습니다.</p></section>
           <AdSenseSlot placement="learning" title="광고" className="learning-inline-ad" />

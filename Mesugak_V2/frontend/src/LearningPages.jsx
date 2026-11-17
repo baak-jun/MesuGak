@@ -107,6 +107,8 @@ function LearningHome() {
           <div className="guide-grid">{Object.values(indicatorPages).map((page) => <GuideCard key={page.slug} page={page} />)}</div>
         </section>
 
+        <AdSenseSlot placement="learning" title="광고" className="learning-inline-ad" />
+
         <section className="learning-section article-home-callout" aria-labelledby="article-home-title">
           <div><span>{pageCopy.learning.articles.label}</span><h2 id="article-home-title">{pageCopy.learning.articles.title}</h2><p>{pageCopy.learning.articles.summary}</p></div>
           <a className="text-link-button" href="/learn/articles">지표 읽을거리 보기 <ArrowRight size={16} /></a>
@@ -157,6 +159,7 @@ function GuidePage({ page }) {
               <p className="guide-worked-reading"><strong>이렇게 읽어 볼 수 있어요</strong>{workedExample.reading}</p>
                <p className="guide-worked-caveat"><strong>한 번 더 볼 점</strong>{workedExample.caveat}</p>
             </section>}
+            <AdSenseSlot placement="learning" title="광고" className="learning-inline-ad" />
             {guide?.points?.length ? <section className="guide-visual-section"><div className="section-heading"><span>그림으로 확인하기</span><h2>그림으로 보는 {page.label}</h2><p>선이 어디서 만나고 갈라지는지 핵심 패턴을 그림으로 비교해 보세요.</p></div><div className="guide-visual-grid">{guide.points.map((point) => <article key={point.label} className="guide-visual-card"><div className="guide-visual-art">{point.graphic}</div><h3>{point.label}</h3><p>{point.desc}</p></article>)}</div></section> : null}
             {learningCheck && <section className="learning-check-section" aria-labelledby={page.slug + '-check-title'}>
               <div className="section-heading"><span>이해 점검</span><h2 id={page.slug + '-check-title'}>이럴 땐 어떻게 읽을까요?</h2><p>조건 하나를 바꿔 보면 앞에서 배운 해석도 달라질까요?</p></div>
@@ -360,6 +363,7 @@ function ConditionLabPage() {
           <a className="back-learning-link" href="/learn">← 지표 학습 홈으로</a>
         </LearningHero>
         <BandCalculationLab />
+        <AdSenseSlot placement="learning" title="광고" className="learning-inline-ad" />
         <section className="guide-worked-example lab-worked-example" aria-labelledby="lab-worked-example-title">
           <div className="section-heading"><span>{pageCopy.lab.example.label}</span><h2 id="lab-worked-example-title">{pageCopy.lab.example.title}</h2><p>{pageCopy.lab.example.summary}</p></div>
           <ol className="guide-worked-steps">
